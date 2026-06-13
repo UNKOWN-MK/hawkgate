@@ -1,0 +1,23 @@
+# vsode
+.vscode
+# BPF build artifacts
+kernel/vmlinux.h
+kernel/*.skel.h
+kernel/*.bpf.o
+kernel/hgctl
+
+# hawkgated build
+hawkgated/hawkgated
+hawkgated/**/*.o
+hawkgated/src/**/*.o
+
+# General C/C++ artifacts
+*.o
+*.d
+*.a
+
+# Editor / OS
+.DS_Store
+.vscode/
+*.swp
+*~
