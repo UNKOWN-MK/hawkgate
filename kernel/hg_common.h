@@ -1,0 +1,97 @@
+#ifndef HG_COMMON_H
+#define HG_COMMON_H
+
+#ifdef __bpf__
+#include <bpf/bpf_helpers.h>
+#else
+#include <linux/bpf.h>   /* defines bpf_spin_lock, __u8/__u16/__u32/__u64 */
+#endif
+
+/* ─── BPF map names ────────────────────────────────────────────────────────────
+ * Defined as bare tokens (no quotes) so MAP_PATH() can stringify them via XSTR.
+ * ALL map references in kernel and userspace must use these macros — never the
+ * raw name — so a rename here propagates everywhere automatically.
+ * --------------------------------------------------------------------------- */
+#define HG_CLIENT_MAP       hg_clients
+#define HG_RATE_MAP         hg_rates
+#define HG_PROTO_MAP        hg_proto
+#define HG_L2_ALLOW_MAP     hg_l2_allow
+#define HG_COUNTER_MAP      hg_counters
+#define HG_IFB_IDX_MAP      hg_ifb_idx
+
+/* ─── BPF pin directory ────────────────────────────────────────────────────────
+ * All maps live under /sys/fs/bpf/hg/ — one subdir, easy to list and wipe.
+ * --------------------------------------------------------------------------- */
+#define HG_PIN_DIR   "/sys/fs/bpf/hg/"
+
+#define STR(x)       #x
+#define XSTR(x)      STR(x)
+#define MAP_PATH(m)  HG_PIN_DIR XSTR(m)
+
+/* ─── EDT shaping constants ────────────────────────────────────────────────── */
+#define NSEC_PER_SEC        1000000000ULL
+#define HG_HORIZON_NS       100000000ULL    /* 100 ms default burst depth      */
+
+/* ─── Unit conversion macros ───────────────────────────────────────────────── */
+#define KB_TO_BYTE(kb)      ((kb)  * 1024ULL)
+#define BYTE_TO_KB(b)       ((b)   / 1024ULL)
+#define KBIT_TO_BPS(kb)     ((kb)  * 1000ULL / 8ULL)   /* kbit/s → bytes/s   */
+#define BPS_TO_KBIT(b)      ((b)   * 8ULL    / 1000ULL) /* bytes/s → kbit/s   */
+
+/* ─── Client session status ────────────────────────────────────────────────── */
+enum client_status {
+    AUTH_OK = 0,   /* session active                  */
+    EXPIRE  = 1,   /* session timer reached zero      */
+    BLOCK   = 2,   /* client explicitly blocked       */
+    IDLE    = 3,   /* idle timeout reached (future)   */
+};
+
+/* ─── Per-CPU accounting counters (hg_counters map) ───────────────────────── */
+struct hg_counter {
+    __u64 U_packets;   /* upload packet count  (this CPU) */
+    __u64 U_bytes;     /* upload byte count    (this CPU) */
+    __u64 D_packets;   /* download packet count           */
+    __u64 D_bytes;     /* download byte count             */
+    __u64 last_seen;   /* last packet timestamp (CLOCK_MONOTONIC ns) */
+    __u32 state;       /* enum client_status              */
+};
+
+/* ─── Rate profile (hg_rates map) ─────────────────────────────────────────── */
+struct hg_rate_cfg {
+    __u64 rate_Bps;    /* allowed rate in bytes/second    */
+    __u64 horizon_ns;  /* max burst depth in nanoseconds  */
+};
+
+/* ─── Per-client auth + EDT state (hg_clients map) ────────────────────────── */
+struct hg_client {
+    struct bpf_spin_lock lock;   /* MUST be first — BPF verifier requirement  */
+
+    /* session metadata */
+    __u64 expiry_ns;     /* absolute expiry (CLOCK_MONOTONIC ns); 0 = never  */
+    __u64 idle_ns;       /* idle timeout tracking (not yet enforced in BPF)  */
+    __u64 auth_ns;       /* time of authentication                            */
+
+    /* bandwidth management */
+    __u32 rate_limit_id; /* key into hg_rates map                             */
+    __u32 pad;           /* explicit 64-bit alignment padding                 */
+
+    /* EDT departure timestamps — initialised to now_ns at add time */
+    __u64 last_u_tstamp; /* next allowed upload   departure (ns)              */
+    __u64 last_d_tstamp; /* next allowed download departure (ns)              */
+
+    /* legacy phase-1 accounting (superseded by hg_counters PERCPU_HASH) */
+    __u64 tx_bytes;
+    __u64 tx_packets;
+    __u64 rx_bytes;
+    __u64 rx_packets;
+};
+
+/* ─── Pre-auth protocol allow-list key (hg_proto map) ─────────────────────── */
+struct hg_allow_key {
+    __u8  proto;    /* IP protocol number (IPPROTO_UDP=17, TCP=6); 0=wildcard */
+    __u16 s_port;   /* source port; 0 = wildcard                              */
+    __u16 d_port;   /* destination port; 0 = wildcard                         */
+    __u32 pad;      /* MUST be zeroed — BPF map key includes padding bytes     */
+};
+
+#endif /* HG_COMMON_H */
