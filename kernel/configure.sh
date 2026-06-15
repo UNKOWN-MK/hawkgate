@@ -1,19 +1,6 @@
 #!/usr/bin/env sh
 # ─────────────────────────────────────────────────────────────────────────────
 # HawkGate — kernel/configure.sh
-#
-# Probes the build toolchain and development libraries, then writes a
-# configured Makefile with the correct compiler flags for this system.
-#
-# Usage:
-#   ./configure.sh                  # auto-detect everything
-#   CLANG=clang-17 ./configure.sh   # override a specific tool
-#
-# Environment overrides (all optional):
-#   BPF_SRC, BPF_OBJ, BPF_SKEL     BPF source / object / skeleton filenames
-#   USER_SRC, USER_CLI, TARGET      userspace source filenames and binary name
-#   CLANG, GCC, BPFTOOL, MAKE_BIN  toolchain overrides
-#   BPF_BASE_FLAGS                  extra clang BPF flags
 # ─────────────────────────────────────────────────────────────────────────────
 
 set -eu
@@ -42,20 +29,44 @@ BPF_BASE_FLAGS=${BPF_BASE_FLAGS:--O2 -g -target bpf}
 VMLINUX_HEADER=${VMLINUX_HEADER:-vmlinux.h}
 
 # ─────────────────────────────────────────────────────────────────────────────
-info() { printf '[configure] %s\n' "$1"; }
-fail() { printf '[configure] error: %s\n' "$1" >&2; exit 1; }
+# Colours  (disable if not a terminal)
+# ─────────────────────────────────────────────────────────────────────────────
+if [ -t 1 ]; then
+    C_RESET='\033[0m'
+    C_BOLD='\033[1m'
+    C_GREEN='\033[0;32m'
+    C_YELLOW='\033[0;33m'
+    C_RED='\033[0;31m'
+    C_CYAN='\033[0;36m'
+    C_DIM='\033[2m'
+else
+    C_RESET='' C_BOLD='' C_GREEN='' C_YELLOW='' C_RED='' C_CYAN='' C_DIM=''
+fi
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Logging helpers
+# ─────────────────────────────────────────────────────────────────────────────
+section() { printf "\n${C_BOLD}${C_CYAN}◆  %s${C_RESET}\n" "$1"; }
+ok()      { printf "  ${C_GREEN}✔${C_RESET}  %s\n" "$1"; }
+warn()    { printf "  ${C_YELLOW}⚠${C_RESET}  %s\n" "$1"; }
+info()    { printf "  ${C_DIM}·${C_RESET}  %s\n" "$1"; }
+fail()    { printf "\n  ${C_RED}✘  error:${C_RESET} %s\n\n" "$1" >&2; exit 1; }
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Tool + file checkers
+# ─────────────────────────────────────────────────────────────────────────────
 check_cmd() {
     if ! command -v "$1" >/dev/null 2>&1; then
-        fail "required command not found: $1 — install it and re-run configure.sh"
+        fail "required command not found: ${C_BOLD}$1${C_RESET}\n        Install it and re-run configure.sh"
     fi
-    info "  found $1 → $(command -v "$1")"
+    ok "$1  ${C_DIM}$(command -v "$1")${C_RESET}"
 }
 
 check_file() {
     if [ ! -f "$SCRIPT_DIR/$1" ]; then
-        fail "required source file not found: $1"
+        fail "required source file not found: ${C_BOLD}$1${C_RESET}"
     fi
+    ok "$1"
 }
 
 pkg_has() {
@@ -63,69 +74,131 @@ pkg_has() {
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
-info "── checking build tools ──────────────────────────────────────────────"
+# vmlinux.h handler — generate or let user supply path
+# ─────────────────────────────────────────────────────────────────────────────
+handle_vmlinux() {
+    if [ -f "$SCRIPT_DIR/$VMLINUX_HEADER" ]; then
+        ok "$VMLINUX_HEADER  ${C_DIM}(already present)${C_RESET}"
+        return
+    fi
+
+    printf "\n  ${C_YELLOW}⚠${C_RESET}  ${C_BOLD}vmlinux.h${C_RESET} not found.\n"
+    printf "     This file encodes your kernel's BTF types and must match\n"
+    printf "     the running kernel. It is never committed to the repo.\n\n"
+    printf "  ${C_BOLD}How would you like to proceed?${C_RESET}\n"
+    printf "     ${C_CYAN}1)${C_RESET} Generate from this kernel  ${C_DIM}(bpftool btf dump … format c)${C_RESET}\n"
+    printf "     ${C_CYAN}2)${C_RESET} I will provide the path to an existing vmlinux.h\n"
+    printf "     ${C_CYAN}q)${C_RESET} Quit and fix manually\n\n"
+    printf "  Choice [1/2/q]: "
+
+    read -r choice
+
+    case "$choice" in
+        1)
+            BTF_SRC="/sys/kernel/btf/vmlinux"
+            if [ ! -f "$BTF_SRC" ]; then
+                fail "BTF file not found at $BTF_SRC\n        Your kernel may have been built without CONFIG_DEBUG_INFO_BTF=y"
+            fi
+            printf "  ${C_DIM}·${C_RESET}  Generating vmlinux.h from $BTF_SRC …\n"
+            if ! "$BPFTOOL" btf dump file "$BTF_SRC" format c > "$SCRIPT_DIR/$VMLINUX_HEADER"; then
+                fail "bpftool failed to generate vmlinux.h"
+            fi
+            ok "vmlinux.h generated  ${C_DIM}($(wc -l < "$SCRIPT_DIR/$VMLINUX_HEADER") lines)${C_RESET}"
+            ;;
+        2)
+            printf "  Path to vmlinux.h: "
+            read -r vmlinux_path
+            vmlinux_path=$(eval echo "$vmlinux_path")   # expand ~ etc.
+            if [ ! -f "$vmlinux_path" ]; then
+                fail "file not found: $vmlinux_path"
+            fi
+            cp "$vmlinux_path" "$SCRIPT_DIR/$VMLINUX_HEADER"
+            ok "vmlinux.h copied from $vmlinux_path"
+            ;;
+        q|Q)
+            printf "\n  Exiting. To generate manually:\n"
+            printf "    bpftool btf dump file /sys/kernel/btf/vmlinux format c > kernel/vmlinux.h\n\n"
+            exit 0
+            ;;
+        *)
+            fail "invalid choice '$choice'"
+            ;;
+    esac
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Banner
+# ─────────────────────────────────────────────────────────────────────────────
+printf "\n${C_BOLD}${C_CYAN}"
+printf "  ██╗  ██╗ █████╗ ██╗    ██╗██╗  ██╗ ██████╗  █████╗ ████████╗███████╗\n"
+printf "  ██║  ██║██╔══██╗██║    ██║██║ ██╔╝██╔════╝ ██╔══██╗╚══██╔══╝██╔════╝\n"
+printf "  ███████║███████║██║ █╗ ██║█████╔╝ ██║  ███╗███████║   ██║   █████╗  \n"
+printf "  ██╔══██║██╔══██║██║███╗██║██╔═██╗ ██║   ██║██╔══██║   ██║   ██╔══╝  \n"
+printf "  ██║  ██║██║  ██║╚███╔███╔╝██║  ██╗╚██████╔╝██║  ██║   ██║   ███████╗\n"
+printf "  ╚═╝  ╚═╝╚═╝  ╚═╝ ╚══╝╚══╝ ╚═╝  ╚═╝ ╚═════╝ ╚═╝  ╚═╝   ╚═╝   ╚══════╝\n"
+printf "${C_RESET}"
+printf "  ${C_DIM}eBPF TC captive portal — configure script${C_RESET}\n"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Checks
+# ─────────────────────────────────────────────────────────────────────────────
+section "Build tools"
 check_cmd "$CLANG"
 check_cmd "$GCC"
 check_cmd "$BPFTOOL"
 check_cmd "$MAKE_BIN"
 
-info "── checking kernel version ───────────────────────────────────────────"
+section "Kernel version"
 KVER=$(uname -r)
 KMAJ=$(echo "$KVER" | cut -d. -f1)
 KMIN=$(echo "$KVER" | cut -d. -f2)
 if [ "$KMAJ" -lt 5 ] || { [ "$KMAJ" -eq 5 ] && [ "$KMIN" -lt 13 ]; }; then
-    fail "kernel $KVER is too old — HawkGate requires Linux >= 5.13 (bpf_skb_set_tstamp)"
+    fail "kernel $KVER is too old\n        HawkGate requires Linux ≥ 5.13  (bpf_skb_set_tstamp)"
 fi
-info "  kernel $KVER — ok"
+ok "Linux $KVER"
 
-info "── checking source files ─────────────────────────────────────────────"
+section "Source files"
 check_file "$BPF_SRC"
 check_file "$USER_SRC"
 check_file "$USER_CLI"
-check_file "$VMLINUX_HEADER"
 check_file "hg_tc.bpf.h"
 check_file "hg_common.h"
 check_file "hg_user.h"
+handle_vmlinux
 
-info "── probing libbpf / libelf / zlib ───────────────────────────────────"
+section "Libraries  (libbpf / libelf / zlib)"
 LIBBPF_CFLAGS=""
 LIBBPF_LIBS="-lbpf -lelf -lz"
 
 if pkg_has libbpf; then
     LIBBPF_CFLAGS=$(pkg-config --cflags libbpf)
     LIBBPF_LIBS=$(pkg-config --libs libbpf)
-    info "  libbpf via pkg-config: $LIBBPF_LIBS"
-
-    if pkg_has libelf; then
-        LIBBPF_LIBS="$LIBBPF_LIBS $(pkg-config --libs libelf)"
-    fi
-    if pkg_has zlib; then
-        LIBBPF_LIBS="$LIBBPF_LIBS $(pkg-config --libs zlib)"
-    else
-        LIBBPF_LIBS="$LIBBPF_LIBS -lz"
-    fi
+    if pkg_has libelf; then LIBBPF_LIBS="$LIBBPF_LIBS $(pkg-config --libs libelf)"; fi
+    if pkg_has zlib;   then LIBBPF_LIBS="$LIBBPF_LIBS $(pkg-config --libs zlib)";
+                       else LIBBPF_LIBS="$LIBBPF_LIBS -lz"; fi
+    ok "libbpf  ${C_DIM}(via pkg-config)${C_RESET}"
 else
-    info "  pkg-config entry for libbpf not found — falling back to -lbpf -lelf -lz"
+    warn "pkg-config entry for libbpf not found — falling back to -lbpf -lelf -lz"
 fi
 
-# compile-link smoke test
 if ! printf '#include <bpf/libbpf.h>\n#include <bpf/bpf.h>\nint main(void){return 0;}\n' | \
     "$GCC" -x c - $LIBBPF_CFLAGS $LIBBPF_LIBS -o /dev/null >/dev/null 2>&1; then
-    fail "libbpf headers or link flags are not usable.
-       Install: apt install libbpf-dev libelf-dev zlib1g-dev   (Debian/Ubuntu)
-                yum install libbpf-devel elfutils-libelf-devel  (RHEL/Fedora)"
+    fail "libbpf headers or link flags are not usable\n\
+        Install:  apt install libbpf-dev libelf-dev zlib1g-dev   ${C_DIM}(Debian/Ubuntu)${C_RESET}\n\
+                  yum install libbpf-devel elfutils-libelf-devel  ${C_DIM}(RHEL/Fedora)${C_RESET}"
 fi
-info "  libbpf compile+link smoke test — ok"
+ok "compile + link smoke test"
 
 # ─────────────────────────────────────────────────────────────────────────────
-info "── writing Makefile ──────────────────────────────────────────────────"
+# Write Makefile
+# ─────────────────────────────────────────────────────────────────────────────
+section "Writing Makefile"
 cat > "$MAKEFILE_PATH" <<MAKE
 # ─────────────────────────────────────────────────────────────────────────────
 # HawkGate — kernel/Makefile  (auto-generated by configure.sh)
 # Regenerate with: ./configure.sh
 # ─────────────────────────────────────────────────────────────────────────────
 
-# ── file names ────────────────────────────────────────────────────────────────
 BPF_SRC      ?= $BPF_SRC
 BPF_OBJ      ?= $BPF_OBJ
 BPF_SKEL     ?= $BPF_SKEL
@@ -133,30 +206,24 @@ USER_SRC     ?= $USER_SRC
 USER_CLI     ?= $USER_CLI
 TARGET       ?= $TARGET
 
-# ── tools ─────────────────────────────────────────────────────────────────────
 CLANG        ?= $CLANG
 GCC          ?= $GCC
 BPFTOOL      ?= $BPFTOOL
 
-# ── flags ─────────────────────────────────────────────────────────────────────
 BPF_FLAGS    ?= $BPF_BASE_FLAGS
 USER_CFLAGS  ?= -O2 -g -Wall -Wextra $LIBBPF_CFLAGS
 USER_LIBS    ?= $LIBBPF_LIBS
 
-# ── phony targets ─────────────────────────────────────────────────────────────
 .PHONY: all clean rebuild
 
 all: \$(TARGET)
 
-# ── step 1: compile BPF kernel program ───────────────────────────────────────
 \$(BPF_OBJ): \$(BPF_SRC) hg_tc.bpf.h hg_common.h
 	\$(CLANG) \$(BPF_FLAGS) -c \$< -o \$@
 
-# ── step 2: generate libbpf skeleton ─────────────────────────────────────────
 \$(BPF_SKEL): \$(BPF_OBJ)
 	\$(BPFTOOL) gen skeleton \$< > \$@
 
-# ── step 3: compile userspace binary ─────────────────────────────────────────
 \$(TARGET): \$(USER_CLI) \$(USER_SRC) \$(BPF_SKEL) hg_user.h hg_common.h
 	\$(GCC) \$(USER_CFLAGS) \$(USER_CLI) \$(USER_SRC) -o \$@ \$(USER_LIBS)
 
@@ -166,13 +233,13 @@ clean:
 	rm -f \$(BPF_OBJ) \$(BPF_SKEL) \$(TARGET)
 MAKE
 
-info "── configuration complete ────────────────────────────────────────────"
-info ""
-info "  Next steps:"
-info "    1. Generate vmlinux.h for your kernel (if not already present):"
-info "         bpftool btf dump file /sys/kernel/btf/vmlinux format c > vmlinux.h"
-info "    2. Build:"
-info "         make"
-info "    3. Run (as root):"
-info "         sudo ./hgctl start -i br0"
-info ""
+ok "Makefile written  ${C_DIM}($MAKEFILE_PATH)${C_RESET}"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Done
+# ─────────────────────────────────────────────────────────────────────────────
+printf "\n${C_BOLD}${C_GREEN}  ✔  Configuration complete${C_RESET}\n\n"
+printf "  ${C_BOLD}Next steps:${C_RESET}\n"
+printf "    ${C_CYAN}make${C_RESET}               build hgctl\n"
+printf "    ${C_CYAN}make rebuild${C_RESET}       clean build from scratch\n"
+printf "    ${C_CYAN}sudo ./hgctl start -i br0${C_RESET}\n\n"
