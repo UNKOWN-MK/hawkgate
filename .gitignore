@@ -11,6 +11,9 @@ hawkgated/hawkgated
 hawkgated/**/*.o
 hawkgated/src/**/*.o
 
+#personal notes
+notes/
+
 # General C/C++ artifacts
 *.o
 *.d
