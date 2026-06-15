@@ -17,6 +17,7 @@ BPF_OBJ      ?= hg_tc.bpf.o
 BPF_SKEL     ?= hg_tc.skel.h
 USER_SRC     ?= hg_control.c
 USER_CLI     ?= hg_cli.c
+USER_READER  ?= hg_reader.c
 TARGET       ?= hgctl
 
 # ── tools ─────────────────────────────────────────────────────────────────────
@@ -44,11 +45,11 @@ $(BPF_SKEL): $(BPF_OBJ)
 	$(BPFTOOL) gen skeleton $< > $@
 
 # ── step 3: compile userspace binary ─────────────────────────────────────────
-$(TARGET): $(USER_CLI) $(USER_SRC) $(BPF_SKEL) hg_user.h hg_common.h
-	$(GCC) $(USER_CFLAGS) $(USER_CLI) $(USER_SRC) -o $@ $(USER_LIBS)
+$(TARGET): $(USER_CLI) $(USER_SRC) $(USER_READER) $(BPF_SKEL) hg_user.h hg_common.h hg_reader.h
+	$(GCC) $(USER_CFLAGS) $(USER_CLI) $(USER_SRC) $(USER_READER) -o $@ $(USER_LIBS)
 
 # ── utility targets ───────────────────────────────────────────────────────────
 rebuild: clean all
 
 clean:
-	rm -f $(BPF_OBJ) $(BPF_SKEL) $(TARGET)
+	rm -f $(BPF_OBJ) $(BPF_SKEL) $(TARGET) *.o

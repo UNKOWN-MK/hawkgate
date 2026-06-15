@@ -85,6 +85,7 @@ int  add_action(const char *iface, const char *ip,
 int  del_action(const char *iface, const char *ip);
 int  show_action(const char *iface);
 int  details_action(const char *iface);
+int  details_one_action(const char *iface, const char *ip);
 int  protocol_allow_add_action(struct proto_rule *rule);
 int  protocol_allow_del_action(struct proto_rule *rule);
 bool hg_get_rate_cfg(__u32 rate_id, struct hg_rate_cfg *out);

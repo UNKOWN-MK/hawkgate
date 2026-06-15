@@ -206,32 +206,41 @@ int parse_show(int argc, char **argv, const char *prog)
     return SUCCESS;
 }
 
+static struct option details_opts[] = {
+    {"iface",  required_argument, 0, 'i'},
+    {"client", required_argument, 0, 'c'},
+    {0, 0, 0, 0}
+};
+ 
 int parse_details(int argc, char **argv, const char *prog)
 {
     char iface[16] = {0};
+    char ip[16]    = {0};
     int c;
-
-    while ((c = getopt_long(argc, argv, "i:", iface_opts, NULL)) != -1)
-    {
-        switch (c)
-        {
+ 
+    while ((c = getopt_long(argc, argv, "i:c:", details_opts, NULL)) != -1) {
+        switch (c) {
         case 'i':
-            strncpy(iface, optarg, sizeof(iface) - 1);
+            strncpy(iface, optarg, sizeof(iface)-1);
+            break;
+        case 'c':
+            strncpy(ip, optarg, sizeof(ip)-1);
             break;
         default:
             print_details_help(prog);
             return FAILED;
         }
     }
-
-    if (!iface[0])
-    {
+ 
+    if (!iface[0]) {
         print_details_help(prog);
         return FAILED;
     }
-
-    details_action(iface);
-    return SUCCESS;
+ 
+    if (ip[0])
+        return details_one_action(iface, ip);
+    else
+        return details_action(iface);
 }
 
 /*******************************************************************************************

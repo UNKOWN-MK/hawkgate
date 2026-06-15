@@ -1,4 +1,5 @@
 #include "hg_user.h"
+#include "hg_reader.h"
 #include <bpf/libbpf.h>
 #include <bpf/bpf.h>
 #include <sys/stat.h>
@@ -473,185 +474,148 @@ int del_action(const char *iface, const char *ip)
     return SUCCESS;
 }
 
-/* ─── show_action ──────────────────────────────────────────────────────────── */
+/* ─── show_action ──────────────────────────────────────────────────────────── *
+ * Prints a summary header + top-N client table sorted by download bytes.      *
+ * Options (future CLI flags, currently using defaults):                        *
+ *   --top N        show only top N clients  (default: 20)                     *
+ *   --sort <key>   sort by dn_bytes|up_bytes|last_seen|age (default: dn_bytes) *
+ *   --state <s>    filter by auth_ok|expire|block (default: all)              *
+ * ---------------------------------------------------------------------------- */
 int show_action(const char *iface)
 {
-    (void)iface; /* reserved for future per-iface map support */
+    (void)iface;
 
-    int map_fd = bpf_obj_get(MAP_PATH(HG_COUNTER_MAP));
-    if (map_fd < 0)
-    {
-        perror("hgctl: show — hg_counters open failed");
+    struct hg_client_stats *clients = NULL;
+    struct hg_gateway_stats summary = {0};
+    int count = 0;
+
+    if (hg_read_all(&clients, &count,
+                    HG_SORT_DN_BYTES, HG_FILTER_ALL, 20, &summary) < 0)
         return FAILED;
-    }
 
-    int ncpu = libbpf_num_possible_cpus();
-    struct hg_counter *values = calloc((size_t)ncpu, sizeof(struct hg_counter));
-    if (!values)
+    /* ── summary header ── */
+    char up_buf[16], dn_buf[16];
+    hg_format_bytes(summary.total_up_bytes, up_buf, sizeof(up_buf));
+    hg_format_bytes(summary.total_dn_bytes, dn_buf, sizeof(dn_buf));
+
+    printf("\nHawkGate · %s   active: %d   expired: %d   "
+           "total: ↑ %s  ↓ %s\n\n",
+           iface,
+           summary.active_clients,
+           summary.expired_clients,
+           up_buf, dn_buf);
+
+    if (count == 0)
     {
-        perror("hgctl: calloc");
-        close(map_fd);
-        return FAILED;
+        printf("  no clients\n\n");
+        return SUCCESS;
     }
 
-    printf("\nClient traffic counters\n");
-    printf("%-18s %-10s %-14s %-10s %-14s\n",
-           "IP", "UP pkts", "UP bytes", "DN pkts", "DN bytes");
-    printf("%-18s %-10s %-14s %-10s %-14s\n",
-           "--", "-------", "--------", "-------", "--------");
+    /* ── table ── */
+    printf("%-18s %-10s %-12s %-10s %-12s  %s\n",
+           "IP", "State", "UP", "DN pkts", "DN", "Last seen");
+    printf("%-18s %-10s %-12s %-10s %-12s  %s\n",
+           "--", "-----", "--", "-------", "--", "---------");
 
-    __u32 key, prev_key;
-    int ret = bpf_map_get_next_key(map_fd, NULL, &key);
-    while (ret == 0)
+    for (int i = 0; i < count; i++)
     {
-        memset(values, 0, (size_t)ncpu * sizeof(struct hg_counter));
-        struct hg_counter total = {0};
+        struct hg_client_stats *c = &clients[i];
+        char up_b[16], dn_b[16];
+        hg_format_bytes(c->up_bytes, up_b, sizeof(up_b));
+        hg_format_bytes(c->dn_bytes, dn_b, sizeof(dn_b));
 
-        if (bpf_map_lookup_elem(map_fd, &key, values) == 0)
-        {
-            for (int i = 0; i < ncpu; i++)
-            {
-                total.U_packets += values[i].U_packets;
-                total.U_bytes += values[i].U_bytes;
-                total.D_packets += values[i].D_packets;
-                total.D_bytes += values[i].D_bytes;
-            }
-            struct in_addr a = {.s_addr = key};
-            printf("%-18s %-10llu %-14llu %-10llu %-14llu\n",
-                   inet_ntoa(a),
-                   total.U_packets, total.U_bytes,
-                   total.D_packets, total.D_bytes);
-        }
-
-        prev_key = key;
-        ret = bpf_map_get_next_key(map_fd, &prev_key, &key);
+        printf("%-18s %-10s %-12s %-10llu %-12s  %lds ago\n",
+               c->ip,
+               hg_state_str(c->state),
+               up_b,
+               c->dn_packets,
+               dn_b,
+               c->age_sec);
     }
 
-    free(values);
-    close(map_fd);
+    printf("\n  showing top %d by download · use --top N or --state to filter\n\n",
+           count);
+
+    hg_stats_free(clients);
     return SUCCESS;
 }
 
-/* ─── details_action ───────────────────────────────────────────────────────── */
+/* ─── details_action ───────────────────────────────────────────────────────── *
+ * Deep-dive for a single client. Requires -c <ip>.                            *
+ * Shows full session state, rate policy, EDT timestamps, and traffic counters. *
+ * ---------------------------------------------------------------------------- */
 int details_action(const char *iface)
 {
-    (void)iface; /* reserved for future per-iface map support */
+    (void)iface;
 
-    int counter_fd = bpf_obj_get(MAP_PATH(HG_COUNTER_MAP));
-    int client_fd = bpf_obj_get(MAP_PATH(HG_CLIENT_MAP));
+    /* details without -c <ip> is not useful at scale — print guidance */
+    fprintf(stderr,
+            "hgctl: 'details' requires a client IP\n"
+            "  usage: hgctl details -i <iface> -c <ip>\n"
+            "  example: hgctl details -i br0 -c 192.168.100.10\n\n"
+            "  for all clients use: hgctl show -i <iface>\n");
+    return FAILED;
+}
 
-    if (counter_fd < 0 || client_fd < 0)
-    {
-        perror("hgctl: details — map open failed");
-        if (counter_fd >= 0)
-            close(counter_fd);
-        if (client_fd >= 0)
-            close(client_fd);
+/* ─── details_one_action ────────────────────────────────────────────────────── *
+ * Called by parse_details when -c <ip> is provided.                            *
+ * ---------------------------------------------------------------------------- */
+int details_one_action(const char *iface, const char *ip)
+{
+    (void)iface;
+
+    struct hg_client_stats s = {0};
+    if (hg_read_one(ip, &s) < 0)
         return FAILED;
-    }
 
-    int ncpu = libbpf_num_possible_cpus();
-    struct hg_counter *values = calloc((size_t)ncpu, sizeof(struct hg_counter));
-    if (!values)
+    char up_b[16], dn_b[16];
+    hg_format_bytes(s.up_bytes, up_b, sizeof(up_b));
+    hg_format_bytes(s.dn_bytes, dn_b, sizeof(dn_b));
+
+    /* format timestamps */
+    char auth_buf[32] = "n/a";
+    char expiry_buf[32] = "never";
+    char seen_buf[32] = "n/a";
+
+    if (s.auth_time > 0)
     {
-        perror("hgctl: calloc");
-        close(counter_fd);
-        close(client_fd);
-        return FAILED;
+        struct tm *t = localtime(&s.auth_time);
+        strftime(auth_buf, sizeof(auth_buf), "%H:%M:%S", t);
     }
-
-    /* compute CLOCK_BOOTTIME → wall clock offset for expiry display */
-    struct timespec ts_real, ts_boot;
-    clock_gettime(CLOCK_REALTIME, &ts_real);
-    clock_gettime(CLOCK_BOOTTIME, &ts_boot);
-    time_t boot_to_wall = ts_real.tv_sec - ts_boot.tv_sec;
-
-    printf("\nClient details\n");
-    printf("===========================================================================================================\n");
-    printf("%-18s %-9s %-12s %-9s %-12s %-10s %-22s %s\n",
-           "IP", "UP pkts", "UP bytes", "DN pkts", "DN bytes",
-           "State", "Policy (id|rate)", "Last seen");
-    printf("-----------------------------------------------------------------------------------------------------------\n");
-
-    __u32 key, prev_key;
-    int ret = bpf_map_get_next_key(counter_fd, NULL, &key);
-    while (ret == 0)
+    if (s.expiry_time > 0)
     {
-        memset(values, 0, (size_t)ncpu * sizeof(struct hg_counter));
-        struct hg_counter total = {0};
-        __u64 last_seen_ns = 0;
-        int current_state = AUTH_OK;
-
-        if (bpf_map_lookup_elem(counter_fd, &key, values) == 0)
-        {
-            for (int i = 0; i < ncpu; i++)
-            {
-                total.U_packets += values[i].U_packets;
-                total.U_bytes += values[i].U_bytes;
-                total.D_packets += values[i].D_packets;
-                total.D_bytes += values[i].D_bytes;
-                if (values[i].last_seen > last_seen_ns)
-                    last_seen_ns = values[i].last_seen;
-                if (values[i].state > (__u32)current_state)
-                    current_state = (int)values[i].state;
-            }
-
-            time_t last_wall = boot_to_wall + (time_t)(last_seen_ns / NSEC_PER_SEC);
-            time_t now = ts_real.tv_sec;
-            time_t age = (last_wall > 0 && now >= last_wall) ? (now - last_wall) : 0;
-
-            struct hg_client st = {0};
-            struct hg_rate_cfg rate = {0};
-            __u32 policy_id = 0;
-
-            if (bpf_map_lookup_elem(client_fd, &key, &st) == 0)
-            {
-                if (st.expiry_ns > 0 &&
-                    st.expiry_ns <= (__u64)ts_boot.tv_sec * NSEC_PER_SEC)
-                    current_state = EXPIRE;
-                policy_id = st.rate_limit_id;
-                hg_get_rate_cfg(policy_id, &rate);
-            }
-
-            const char *state_str;
-            switch (current_state)
-            {
-            case AUTH_OK:
-                state_str = "AUTH_OK";
-                break;
-            case EXPIRE:
-                state_str = "EXPIRE";
-                break;
-            case BLOCK:
-                state_str = "BLOCK";
-                break;
-            case IDLE:
-                state_str = "IDLE";
-                break;
-            default:
-                state_str = "UNKNOWN";
-                break;
-            }
-
-            char policy_buf[32];
-            snprintf(policy_buf, sizeof(policy_buf), "%u|%llukbps",
-                     policy_id, BPS_TO_KBIT(rate.rate_Bps));
-
-            struct in_addr a = {.s_addr = key};
-            printf("%-18s %-9llu %-12llu %-9llu %-12llu %-10s %-22s %lds ago\n",
-                   inet_ntoa(a),
-                   total.U_packets, total.U_bytes,
-                   total.D_packets, total.D_bytes,
-                   state_str, policy_buf, age);
-        }
-
-        prev_key = key;
-        ret = bpf_map_get_next_key(counter_fd, &prev_key, &key);
+        struct tm *t = localtime(&s.expiry_time);
+        strftime(expiry_buf, sizeof(expiry_buf), "%H:%M:%S", t);
+    }
+    if (s.last_seen > 0)
+    {
+        struct tm *t = localtime(&s.last_seen);
+        strftime(seen_buf, sizeof(seen_buf), "%H:%M:%S", t);
     }
 
-    free(values);
-    close(counter_fd);
-    close(client_fd);
+    /* TTL string */
+    char ttl_buf[32];
+    if (s.ttl_sec < 0)
+        snprintf(ttl_buf, sizeof(ttl_buf), "never");
+    else if (s.ttl_sec > 3600)
+        snprintf(ttl_buf, sizeof(ttl_buf), "in %ldh %ldm",
+                 s.ttl_sec / 3600, (s.ttl_sec % 3600) / 60);
+    else
+        snprintf(ttl_buf, sizeof(ttl_buf), "in %ldm %lds",
+                 s.ttl_sec / 60, s.ttl_sec % 60);
+
+    printf("\nClient  %s    %s\n\n", s.ip, hg_state_str(s.state));
+
+    printf("  %-16s %s  (%lds ago)\n", "Auth time", auth_buf, s.session_sec);
+    printf("  %-16s %s  (%s)\n", "Expires", expiry_buf, ttl_buf);
+    printf("  %-16s id=%-4u  %llu kbps  horizon=%llums\n",
+           "Rate policy", s.rate_id, s.rate_kbps, s.horizon_ms);
+    printf("\n");
+    printf("  %-16s %s   in %llu packets\n", "Upload", up_b, s.up_packets);
+    printf("  %-16s %s   in %llu packets\n", "Download", dn_b, s.dn_packets);
+    printf("  %-16s %s  (%lds ago)\n", "Last seen", seen_buf, s.age_sec);
+    printf("\n");
+
     show_protocols();
     return SUCCESS;
 }
