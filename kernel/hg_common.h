@@ -2,9 +2,21 @@
 #define HG_COMMON_H
 
 #ifdef __bpf__
+/* BPF side: vmlinux.h (included by hg_tc.bpf.h before this file) already
+ * provides all kernel types. We only need the BPF helper macros.           */
 #include <bpf/bpf_helpers.h>
 #else
-#include <linux/bpf.h>   /* defines bpf_spin_lock, __u8/__u16/__u32/__u64 */
+/* Userspace side: pull in just the types we need. linux/types.h gives us
+ * __u8/__u16/__u32/__u64. linux/bpf.h gives us struct bpf_spin_lock.
+ * Never include linux/bpf.h on the BPF side — vmlinux.h already has it
+ * and the double inclusion produces hundreds of redefinition errors.
+ *
+ * Guard: if vmlinux.h was already included (e.g. via hg_tc.bpf.h leaking
+ * into a userspace TU), skip linux/bpf.h entirely to avoid conflicts.     */
+#ifndef __VMLINUX_H__         /* skip if vmlinux.h already pulled in  */
+#include <linux/types.h>
+#include <linux/bpf.h>
+#endif
 #endif
 
 /* ─── BPF map names ────────────────────────────────────────────────────────────
@@ -22,11 +34,11 @@
 /* ─── BPF pin directory ────────────────────────────────────────────────────────
  * All maps live under /sys/fs/bpf/hg/ — one subdir, easy to list and wipe.
  * --------------------------------------------------------------------------- */
-#define HG_PIN_DIR   "/sys/fs/bpf/hg/"
+#define HG_PIN_DIR   "/sys/fs/bpf/hg"
 
 #define STR(x)       #x
 #define XSTR(x)      STR(x)
-#define MAP_PATH(m)  HG_PIN_DIR XSTR(m)
+#define MAP_PATH(m)  HG_PIN_DIR "/" XSTR(m)
 
 /* ─── EDT shaping constants ────────────────────────────────────────────────── */
 #define NSEC_PER_SEC        1000000000ULL
@@ -95,3 +107,4 @@ struct hg_allow_key {
 };
 
 #endif /* HG_COMMON_H */
+

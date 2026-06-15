@@ -6,19 +6,19 @@
 *******************************************************************************************/
 static struct option iface_opts[] = {
     {"iface", required_argument, 0, 'i'},
-    {0, 0, 0, 0}
-};
+    {0, 0, 0, 0}};
 
 int parse_start(int argc, char **argv, const char *prog)
 {
     char iface[16] = {0};
     int c;
 
-    while ((c = getopt_long(argc, argv, "i:", iface_opts, NULL)) != -1) {
+    while ((c = getopt_long(argc, argv, "i:", iface_opts, NULL)) != -1)
+    {
         switch (c)
         {
         case 'i':
-            strncpy(iface, optarg, sizeof(iface)-1);
+            strncpy(iface, optarg, sizeof(iface) - 1);
             break;
         default:
             printf("Unknown option\n");
@@ -41,10 +41,12 @@ int parse_stop(int argc, char **argv, const char *prog)
     char iface[16] = {0};
     int c;
 
-    while ((c = getopt_long(argc, argv, "i:", iface_opts, NULL)) != -1) {
-        switch (c) {
+    while ((c = getopt_long(argc, argv, "i:", iface_opts, NULL)) != -1)
+    {
+        switch (c)
+        {
         case 'i':
-            strncpy(iface, optarg, sizeof(iface)-1);
+            strncpy(iface, optarg, sizeof(iface) - 1);
             break;
         default:
             print_stop_help(prog);
@@ -65,24 +67,23 @@ int parse_stop(int argc, char **argv, const char *prog)
                                 ADD ACTION
 *******************************************************************************************/
 static struct option add_opts[] = {
-    {"iface",        required_argument, 0, 'i'},
-    {"client",       required_argument, 0, 'c'},
-    {"expire",       required_argument, 0, 'e'},
-    {"idle",         required_argument, 0, 'w'},
+    {"iface", required_argument, 0, 'i'},
+    {"client", required_argument, 0, 'c'},
+    {"expire", required_argument, 0, 'e'},
+    {"idle", required_argument, 0, 'w'},
     {"DownloadRate", required_argument, 0, 'D'},
-    {"UploadRate",   required_argument, 0, 'U'},
-    {0, 0, 0, 0}
-};
+    {"UploadRate", required_argument, 0, 'U'},
+    {0, 0, 0, 0}};
 
 int parse_add(int argc, char **argv, const char *prog)
 {
     char iface[16] = {0};
-    char ip[16]    = {0};
-    time_t expire  = 0;
-    time_t idle    = 0;
-    __u64 D_limit  = 0;
-    __u64 U_limit  = 0;
-    __u32 rate_id  = RATE_ID_NO_LIMIT;
+    char ip[16] = {0};
+    time_t expire = 0;
+    time_t idle = 0;
+    __u64 D_limit = 0;
+    __u64 U_limit = 0;
+    __u32 rate_id = RATE_ID_NO_LIMIT;
 
     int c;
     while ((c = getopt_long(argc, argv, "i:c:e:w:D:U:", add_opts, NULL)) != -1)
@@ -90,16 +91,16 @@ int parse_add(int argc, char **argv, const char *prog)
         switch (c)
         {
         case 'i':
-            strncpy(iface, optarg, sizeof(iface)-1);
+            strncpy(iface, optarg, sizeof(iface) - 1);
             break;
         case 'c':
-            strncpy(ip, optarg, sizeof(ip)-1);
+            strncpy(ip, optarg, sizeof(ip) - 1);
             break;
         case 'e':
             expire = atoll(optarg);
             break;
         case 'w':
-            idle   = atoll(optarg);
+            idle = atoll(optarg);
             break;
         case 'D':
             D_limit = atoll(optarg);
@@ -121,7 +122,7 @@ int parse_add(int argc, char **argv, const char *prog)
 
     if (D_limit && U_limit)
     {
-        char *ip_last  = strdup(ip);
+        char *ip_last = strdup(ip);
         char *last_dot = strrchr(ip_last, '.');
         rate_id = atoi(last_dot != NULL ? last_dot + 1 : "0");
         printf("hgctl: rate_limit_id = %u\n", rate_id);
@@ -139,24 +140,25 @@ int parse_add(int argc, char **argv, const char *prog)
                                 DELETE ACTION
 *******************************************************************************************/
 static struct option del_opts[] = {
-    {"iface",  required_argument, 0, 'i'},
+    {"iface", required_argument, 0, 'i'},
     {"client", required_argument, 0, 'c'},
-    {0, 0, 0, 0}
-};
+    {0, 0, 0, 0}};
 
 int parse_del(int argc, char **argv, const char *prog)
 {
     char iface[16] = {0};
-    char ip[16]    = {0};
+    char ip[16] = {0};
     int c;
 
-    while ((c = getopt_long(argc, argv, "i:c:", del_opts, NULL)) != -1) {
-        switch (c) {
+    while ((c = getopt_long(argc, argv, "i:c:", del_opts, NULL)) != -1)
+    {
+        switch (c)
+        {
         case 'i':
-            strncpy(iface, optarg, sizeof(iface)-1);
+            strncpy(iface, optarg, sizeof(iface) - 1);
             break;
         case 'c':
-            strncpy(ip, optarg, sizeof(ip)-1);
+            strncpy(ip, optarg, sizeof(ip) - 1);
             break;
         default:
             print_del_help(prog);
@@ -181,10 +183,12 @@ int parse_show(int argc, char **argv, const char *prog)
     char iface[16] = {0};
     int c;
 
-    while ((c = getopt_long(argc, argv, "i:", iface_opts, NULL)) != -1) {
-        switch (c) {
+    while ((c = getopt_long(argc, argv, "i:", iface_opts, NULL)) != -1)
+    {
+        switch (c)
+        {
         case 'i':
-            strncpy(iface, optarg, sizeof(iface)-1);
+            strncpy(iface, optarg, sizeof(iface) - 1);
             break;
         default:
             print_show_help(prog);
@@ -207,10 +211,12 @@ int parse_details(int argc, char **argv, const char *prog)
     char iface[16] = {0};
     int c;
 
-    while ((c = getopt_long(argc, argv, "i:", iface_opts, NULL)) != -1) {
-        switch (c) {
+    while ((c = getopt_long(argc, argv, "i:", iface_opts, NULL)) != -1)
+    {
+        switch (c)
+        {
         case 'i':
-            strncpy(iface, optarg, sizeof(iface)-1);
+            strncpy(iface, optarg, sizeof(iface) - 1);
             break;
         default:
             print_details_help(prog);
@@ -233,12 +239,11 @@ int parse_details(int argc, char **argv, const char *prog)
 *******************************************************************************************/
 static struct option proto_opts[] = {
     {"action", required_argument, 0, 'a'},
-    {"iface",  required_argument, 0, 'i'},
-    {"l2",     required_argument, 0, 1},
-    {"l3",     required_argument, 0, 2},
-    {"l4",     required_argument, 0, 3},
-    {0, 0, 0, 0}
-};
+    {"iface", required_argument, 0, 'i'},
+    {"l2", required_argument, 0, 1},
+    {"l3", required_argument, 0, 2},
+    {"l4", required_argument, 0, 3},
+    {0, 0, 0, 0}};
 
 static int parse_l2(char *arg, struct proto_rule *r)
 {
@@ -279,18 +284,20 @@ static int parse_l4(char *arg, struct proto_rule *r)
 
 int parse_proto(int argc, char **argv, const char *prog)
 {
-    struct proto_rule rule        = {0};
-    char iface[16]                = {0};
-    char action_proto[4]          = {0};
+    struct proto_rule rule = {0};
+    char iface[16] = {0};
+    char action_proto[4] = {0};
     int c;
 
-    while ((c = getopt_long(argc, argv, "i:a:", proto_opts, NULL)) != -1) {
-        switch (c) {
+    while ((c = getopt_long(argc, argv, "i:a:", proto_opts, NULL)) != -1)
+    {
+        switch (c)
+        {
         case 'i':
-            strncpy(iface, optarg, sizeof(iface)-1);
+            strncpy(iface, optarg, sizeof(iface) - 1);
             break;
         case 'a':
-            strncpy(action_proto, optarg, sizeof(action_proto)-1);
+            strncpy(action_proto, optarg, sizeof(action_proto) - 1);
             break;
         case 1:
             parse_l2(optarg, &rule);
@@ -340,8 +347,7 @@ void print_start_help(const char *prog)
         "Example:\n"
         "  %s start -i br0\n"
         "\n",
-        prog, prog
-    );
+        prog, prog);
 }
 
 void print_stop_help(const char *prog)
@@ -356,8 +362,7 @@ void print_stop_help(const char *prog)
         "Example:\n"
         "  %s stop -i br0\n"
         "\n",
-        prog, prog
-    );
+        prog, prog);
 }
 
 void print_add_help(const char *prog)
@@ -377,8 +382,7 @@ void print_add_help(const char *prog)
         "Example:\n"
         "  %s add -i br0 -c 192.168.100.50 -e 3600 -w 600 -D 10240 -U 5120\n"
         "\n",
-        prog, prog
-    );
+        prog, prog);
 }
 
 void print_del_help(const char *prog)
@@ -394,8 +398,7 @@ void print_del_help(const char *prog)
         "Example:\n"
         "  %s del -i br0 -c 192.168.100.50\n"
         "\n",
-        prog, prog
-    );
+        prog, prog);
 }
 
 void print_show_help(const char *prog)
@@ -410,8 +413,7 @@ void print_show_help(const char *prog)
         "Example:\n"
         "  %s show -i br0\n"
         "\n",
-        prog, prog
-    );
+        prog, prog);
 }
 
 void print_details_help(const char *prog)
@@ -426,8 +428,7 @@ void print_details_help(const char *prog)
         "Example:\n"
         "  %s details -i br0\n"
         "\n",
-        prog, prog
-    );
+        prog, prog);
 }
 
 void print_proto_help(const char *prog)
@@ -452,8 +453,7 @@ void print_proto_help(const char *prog)
         "  %s proto -a add -i br0 --l4 17:any:53\n"
         "  %s proto -a del -i br0 --l4 17:any:53\n"
         "\n",
-        prog, prog, prog, prog, prog
-    );
+        prog, prog, prog, prog, prog);
 }
 
 void print_help(const char *prog)
@@ -474,8 +474,7 @@ void print_help(const char *prog)
         "  details   Show detailed client info (state, rate, age)\n"
         "  proto     Manage pre-auth protocol allow rules\n"
         "\n",
-        prog
-    );
+        prog);
 
     print_start_help(prog);
     print_stop_help(prog);
@@ -491,6 +490,5 @@ void print_help(const char *prog)
         "  - Only one protocol rule can be added per 'proto' command\n"
         "  - All protocol values are numeric (no names accepted)\n"
         "  - Enforcement happens in the kernel datapath via eBPF TC hooks\n"
-        "\n"
-    );
+        "\n");
 }
