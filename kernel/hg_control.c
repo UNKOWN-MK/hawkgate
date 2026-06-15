@@ -131,7 +131,7 @@ int main(int argc, char **argv)
  * Failure policy:                                                              *
  *   - TC hook attach failures  → hard fail (no enforcement at all)            *
  *   - FQ on bridge failure     → hard fail (download rate limit broken)       *
- *   - IFB / FQ on ifb0 failure → hard fail (upload rate limit broken)        *
+ *   - IFB / FQ on ifb_hg failure → hard fail (upload rate limit broken)        *
  * ---------------------------------------------------------------------------- */
 int start_action(const char *iface)
 {
@@ -236,21 +236,21 @@ int start_action(const char *iface)
 
     /* ── set up IFB for upload EDT shaping ──
      * Upload flow: br0 ingress [eBPF sets tstamp + bpf_redirect]
-     *           → ifb0 [FQ honours tstamp]
+     *           → ifb_hg [FQ honours tstamp]
      *           → re-inject (tc_skip_classify=1) → ip_forward → WAN
      * Failure here means upload rate limiting is silently broken — hard fail. */
     run_cmd_best_effort("modprobe ifb 2>/dev/null");
-    run_cmd_best_effort("ip link add ifb0 type ifb 2>/dev/null");
-    run_cmd_best_effort("ip link set ifb0 up 2>/dev/null");
+    run_cmd_best_effort("ip link add ifb_hg type ifb 2>/dev/null");
+    run_cmd_best_effort("ip link set ifb_hg up 2>/dev/null");
 
-    if (run_cmd_strict("tc qdisc replace dev ifb0 root fq",
-                       "install FQ qdisc on ifb0 (upload EDT)") != SUCCESS)
+    if (run_cmd_strict("tc qdisc replace dev ifb_hg root fq",
+                       "install FQ qdisc on ifb_hg (upload EDT)") != SUCCESS)
         return FAILED;
 
-    __u32 ifb_ifindex = if_nametoindex("ifb0");
+    __u32 ifb_ifindex = if_nametoindex("ifb_hg");
     if (!ifb_ifindex)
     {
-        fprintf(stderr, "hgctl: ifb0 not found after setup\n");
+        fprintf(stderr, "hgctl: ifb_hg not found after setup\n");
         return FAILED;
     }
 
@@ -269,7 +269,7 @@ int start_action(const char *iface)
         return FAILED;
     }
 
-    printf("hgctl: upload EDT shaping enabled (ifb0, ifindex=%u)\n", ifb_ifindex);
+    printf("hgctl: upload EDT shaping enabled (ifb_hg, ifindex=%u)\n", ifb_ifindex);
     close(ifb_fd);
     return SUCCESS;
 }
@@ -300,7 +300,7 @@ int stop_action(const char *iface)
     }
 
     /* tear down IFB and restore bridge qdisc — best effort on stop */
-    run_cmd_best_effort("ip link del ifb0 2>/dev/null");
+    run_cmd_best_effort("ip link del ifb_hg 2>/dev/null");
 
     snprintf(cmd, sizeof(cmd), "tc qdisc del dev %s root 2>/dev/null", iface);
     run_cmd_best_effort(cmd);
