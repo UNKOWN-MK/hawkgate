@@ -2,7 +2,7 @@
 #include "hg_log.h"
 #include <fstream>
 
-CaqdConfig g_config;
+HgConfig g_config;
 
 static inline std::string trim(const std::string& str)
 {
