@@ -9,7 +9,7 @@
 typedef struct config
 {
     std::string iface_name;
-    uint32_t http_port;
+    uint16_t http_port;
     std::string portal_ip;
     uint64_t session_timeout;
     uint32_t max_clients;

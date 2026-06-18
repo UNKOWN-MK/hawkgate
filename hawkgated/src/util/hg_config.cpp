@@ -17,7 +17,7 @@ static bool is_config_valid()
 {
     if(g_config.iface_name.empty())
         return false;
-    if(g_config.http_port == 0)
+    if(g_config.http_port <= 0 || g_config.http_port > 65535)
         return false;
     if(g_config.portal_ip.empty())
         return false;
