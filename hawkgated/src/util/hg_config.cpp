@@ -17,7 +17,7 @@ static bool is_config_valid()
 {
     if(g_config.iface_name.empty())
         return false;
-    if(g_config.http_port <= 0 || g_config.http_port > 65535)
+    if(g_config.http_port == 0)
         return false;
     if(g_config.portal_ip.empty())
         return false;
@@ -27,12 +27,7 @@ static bool is_config_valid()
         return false;
     if(g_config.gateway_fqdn.empty())
         return false;
-    if(g_config.u_rate == 0)
-        return false;
-    if(g_config.d_rate == 0)
-        return false;
-    if(g_config.quota == 0)
-        return false;
+   
     return true;
 }
 
@@ -65,7 +60,13 @@ bool load_config(const char* path)
                 {
                     try
                     {
-                        g_config.http_port = std::stoul(value);
+                        unsigned long tmp = stoul(value);
+                        if(tmp == 0 || tmp > 65535)
+                        {
+                            log_error("Invalid http_port value");
+                            return false;
+                        }
+                        g_config.http_port = static_cast<uint16_t>(tmp);
                     }
                     catch(const std::exception& e)
                     {
