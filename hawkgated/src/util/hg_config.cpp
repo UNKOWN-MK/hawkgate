@@ -1,6 +1,7 @@
 #include "hg_config.h"
 #include "hg_log.h"
 #include <fstream>
+#include <arpa/inet.h>
 
 HgConfig g_config;
 
@@ -75,7 +76,13 @@ bool load_config(const char* path)
                     }
                 }
                 else if(key == "portal_ip")
-                    g_config.portal_ip = value;
+                {
+                    in_addr dst;
+                    if(inet_pton(AF_INET, value.c_str(), &dst) == 1)
+                        g_config.portal_ip = value;
+                    else
+                        return false;
+                }
                 else if(key == "session_timeout")
                 {
                     try
