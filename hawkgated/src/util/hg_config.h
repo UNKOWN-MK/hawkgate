@@ -4,7 +4,7 @@
 #include <string>
 #include <cstdint>
 
-
+enum class PortalMode { BUILTIN, EXTERNAL_URL };
 
 typedef struct config
 {
@@ -17,6 +17,7 @@ typedef struct config
     uint32_t u_rate;
     uint32_t d_rate;
     uint64_t quota;
+    PortalMode portal_mode = PortalMode::BUILTIN;
 }HgConfig;
 
 extern HgConfig g_config;

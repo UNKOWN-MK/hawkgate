@@ -139,6 +139,18 @@ bool load_config(const char* path)
                         return false;
                     }
                 }
+                else if(key == "portal_mode")
+                {
+                    if(value == "builtin")
+                        g_config.portal_mode = PortalMode::BUILTIN;
+                    else if(value == "external_url")
+                        g_config.portal_mode = PortalMode::EXTERNAL_URL;
+                    else
+                    {
+                        log_warning("defaulting portal_mode to BUILTIN");
+                        g_config.portal_mode = PortalMode::BUILTIN;
+                    }
+                }
                 else
                     continue;
             }
