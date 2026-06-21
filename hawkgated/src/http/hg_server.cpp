@@ -9,6 +9,7 @@
 
 #include "../util/hg_log.h"
 #include "../util/hg_config.h"
+#include "../portal/hg_router.h"
 
 #define MAX_EVENTS 64
 #define TIMEOUT -1 // Wait indefinitely for events
@@ -176,8 +177,8 @@ void HgServer::handle_readable(int fd)
 
   if (conn->state == ConnectionState::WRITING)
   {
-    // TODO: call router here, queue_response — wire in when hg_router is done
-    // For now switch epoll to EPOLLOUT
+    std::string response = route(conn->parser.get_request(), conn->client_ip);
+    conn->queue_response(response);
     struct epoll_event ev;
     ev.events = EPOLLOUT | EPOLLET;
     ev.data.fd = fd;
