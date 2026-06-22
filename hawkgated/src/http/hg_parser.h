@@ -11,7 +11,7 @@ typedef struct HttpRequest
   std::string body;
   size_t content_length = 0;
   std::string version;
-};
+} HttpRequest;
 
 enum class ParseState
 {

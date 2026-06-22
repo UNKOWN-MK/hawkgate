@@ -23,7 +23,7 @@ typedef struct HgClientStats
   time_t age_sec;     /* seconds since last packet*/
   time_t session_sec; /* seconds since auth*/
   long ttl_sec;       /* seconds until expiry (-1 = never)*/
-};
+} HgClientStats;
 
 typedef struct client_auth
 {
@@ -32,7 +32,7 @@ typedef struct client_auth
   uint32_t idle_sec;
   uint32_t dn_rate;
   uint32_t up_rate;
-};
+} client_auth;
 
 class HgBpfCtrl
 {
