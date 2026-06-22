@@ -524,7 +524,7 @@ int show_action(const char *iface)
         hg_format_bytes(c->up_bytes, up_b, sizeof(up_b));
         hg_format_bytes(c->dn_bytes, dn_b, sizeof(dn_b));
 
-        printf("%-18s %-10s %-12s %-10llu %-12s  %lds ago\n",
+        printf("%-18s %-10s %-12s %-10lu %-12s  %lds ago\n",
                c->ip,
                hg_state_str(c->state),
                up_b,
@@ -608,11 +608,11 @@ int details_one_action(const char *iface, const char *ip)
 
     printf("  %-16s %s  (%lds ago)\n", "Auth time", auth_buf, s.session_sec);
     printf("  %-16s %s  (%s)\n", "Expires", expiry_buf, ttl_buf);
-    printf("  %-16s id=%-4u  %llu kbps  horizon=%llums\n",
+    printf("  %-16s id=%-4u  %lu kbps  horizon=%lums\n",
            "Rate policy", s.rate_id, s.rate_kbps, s.horizon_ms);
     printf("\n");
-    printf("  %-16s %s   in %llu packets\n", "Upload", up_b, s.up_packets);
-    printf("  %-16s %s   in %llu packets\n", "Download", dn_b, s.dn_packets);
+    printf("  %-16s %s   in %lu packets\n", "Upload", up_b, s.up_packets);
+    printf("  %-16s %s   in %lu packets\n", "Download", dn_b, s.dn_packets);
     printf("  %-16s %s  (%lds ago)\n", "Last seen", seen_buf, s.age_sec);
     printf("\n");
 
