@@ -2,6 +2,9 @@
 #include "util/hg_log.h"
 #include "util/hg_config.h"
 #include "bpf/hg_bpf_ctrl.h"
+#include "portal/hg_auth.h"
+#include "portal/local_auth.h"
+#include "portal/hg_portal.h"
 
 #include <filesystem>
 #include <string>
@@ -62,6 +65,9 @@ int main(int argc, char *argv[])
     log_error("Failed to start hgctl"); 
     return EXIT_FAILURE; 
   }
+  LocalAuth g_auth_provider;
+  init_auth(&g_auth_provider, &bpf);
+  init_portal(&bpf);
   HgServer server;
   g_server = &server;
   if (!g_server->init())

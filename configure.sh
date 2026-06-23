@@ -260,7 +260,8 @@ SRCS = src/main.cpp \\
        src/http/hg_server.cpp \\
        src/portal/hg_router.cpp \\
        src/portal/hg_portal.cpp \\
-       src/portal/hg_auth.cpp
+       src/portal/hg_auth.cpp \\
+       src/portal/local_auth.cpp
 
 OBJS = \$(patsubst %.cpp,\$(BUILD_DIR)/%.o,\$(SRCS))
 

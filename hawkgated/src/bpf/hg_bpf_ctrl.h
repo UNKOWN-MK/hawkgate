@@ -5,6 +5,14 @@
 #include <cstdint>
 #include <ctime>
 
+enum client_status 
+{
+    AUTH_OK = 0,   /* session active                  */
+    EXPIRE  = 1,   /* session timer reached zero      */
+    BLOCK   = 2,   /* client explicitly blocked       */
+    IDLE    = 3,   /* idle timeout reached (future)   */
+};
+
 typedef struct HgClientStats
 {
   /* identity */
