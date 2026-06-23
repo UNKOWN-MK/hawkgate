@@ -51,12 +51,15 @@
 #define BPS_TO_KBIT(b)      ((b)   * 8ULL    / 1000ULL) /* bytes/s → kbit/s   */
 
 /* ─── Client session status ────────────────────────────────────────────────── */
+#ifndef HG_CLIENT_STATUS_DEFINED
+#define HG_CLIENT_STATUS_DEFINED
 enum client_status {
     AUTH_OK = 0,   /* session active                  */
     EXPIRE  = 1,   /* session timer reached zero      */
     BLOCK   = 2,   /* client explicitly blocked       */
     IDLE    = 3,   /* idle timeout reached (future)   */
 };
+#endif
 
 /* ─── Per-CPU accounting counters (hg_counters map) ───────────────────────── */
 struct hg_counter {
