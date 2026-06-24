@@ -77,7 +77,7 @@ void print_details_help(const char *prog);
 void print_proto_help(const char *prog);
 
 /* ─── Action functions (hg_control.c) ─────────────────────────────────────── */
-int  start_action(const char *iface);
+int start_action(const char *iface, const char *portal_ip, __u16 portal_port);
 int  stop_action(const char *iface);
 int  add_action(const char *iface, const char *ip,
                 time_t expire, time_t idle,

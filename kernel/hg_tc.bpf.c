@@ -64,6 +64,15 @@ struct {
     __uint(pinning,     LIBBPF_PIN_BY_NAME);
 } HG_IFB_IDX_MAP SEC(".maps");
 
+/* Portal IP/port config — single entry, written by hawkgated at startup */
+struct {
+    __uint(type,        BPF_MAP_TYPE_ARRAY);
+    __uint(max_entries, 1);
+    __type(key,         __u32);
+    __type(value,       struct hg_portal_cfg);
+    __uint(pinning,     LIBBPF_PIN_BY_NAME);
+} HG_PORTAL_CFG_MAP SEC(".maps");
+
 /* ─── apply_edt_shaping ────────────────────────────────────────────────────── *
  * Computes the next EDT departure timestamp for this packet and stamps it into *
  * skb->tstamp. The FQ qdisc holds the packet until that time arrives.         *
@@ -327,14 +336,10 @@ static __always_inline bool proto_allowed(struct hg_allow_key *k)
 }
 
 /* ─── redirect_to_portal ───────────────────────────────────────────────────── *
- * In-kernel DNAT: rewrites IP dst → PORTAL_IP and TCP/UDP dst port →          *
- * PORTAL_PORT, then fixes IP and L4 checksums with BPF helpers.               *
- *                                                                              *
+ * In-kernel DNAT: reads portal IP/port from hg_portal_cfg_map at runtime,   *
+ * rewrites IP dst + TCP/UDP dst port, fixes checksums with BPF helpers.      *
  * After bpf_skb_store_bytes() the data/data_end pointers are invalidated;     *
- * the helper re-fetches them from skb before each L4 access.                  *
- *                                                                              *
- * TODO: read PORTAL_IP / PORTAL_PORT from a BPF map so hawkgated can          *
- * configure them at runtime without recompiling.                               *
+ * the helper re-fetches them from skb before each L4 access.                *
  * ---------------------------------------------------------------------------- */
 static __always_inline int redirect_to_portal(struct __sk_buff *skb)
 {
@@ -360,8 +365,15 @@ static __always_inline int redirect_to_portal(struct __sk_buff *skb)
     if (data + ip_off + ip_hdr_len > data_end)
         return TC_ACT_SHOT;
 
+    __u32 cfg_key = 0;
+    struct hg_portal_cfg *cfg = bpf_map_lookup_elem(&HG_PORTAL_CFG_MAP, &cfg_key);
+    if (!cfg)
+        return TC_ACT_OK;   /* config not ready — pass, do not redirect */
+
+    __be32 new_daddr = cfg->portal_ip;
+    __be16 new_dport = cfg->portal_port;
+
     __be32 old_daddr    = iph->daddr;
-    __be32 new_daddr    = bpf_htonl(PORTAL_IP);
     __be16 iph_protocol = iph->protocol;
 
     /* fix IP checksum, then write new dst IP */
@@ -384,7 +396,6 @@ static __always_inline int redirect_to_portal(struct __sk_buff *skb)
             return TC_ACT_SHOT;
 
         __be16 old_dport = tcph->dest;
-        __be16 new_dport = bpf_htons(PORTAL_PORT);
 
         bpf_l4_csum_replace(skb, l4_off + offsetof(struct tcphdr, check),
                             old_daddr, new_daddr, sizeof(new_daddr));
@@ -404,7 +415,6 @@ static __always_inline int redirect_to_portal(struct __sk_buff *skb)
             return TC_ACT_SHOT;
 
         __be16 old_dport = udph->dest;
-        __be16 new_dport = bpf_htons(PORTAL_PORT);
 
         if (udph->check) {
             bpf_l4_csum_replace(skb, l4_off + offsetof(struct udphdr, check),

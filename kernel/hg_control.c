@@ -134,7 +134,7 @@ int main(int argc, char **argv)
  *   - FQ on bridge failure     → hard fail (download rate limit broken)       *
  *   - IFB / FQ on ifb_hg failure → hard fail (upload rate limit broken)        *
  * ---------------------------------------------------------------------------- */
-int start_action(const char *iface)
+int start_action(const char *iface, const char *portal_ip, __u16 portal_port)
 {
     struct hg_tc_bpf *skel;
     struct bpf_tc_hook hook = {};
@@ -175,6 +175,7 @@ int start_action(const char *iface)
     bpf_map__set_pin_path(skel->maps.HG_PROTO_MAP, MAP_PATH(HG_PROTO_MAP));
     bpf_map__set_pin_path(skel->maps.HG_L2_ALLOW_MAP, MAP_PATH(HG_L2_ALLOW_MAP));
     bpf_map__set_pin_path(skel->maps.HG_IFB_IDX_MAP, MAP_PATH(HG_IFB_IDX_MAP));
+    bpf_map__set_pin_path(skel->maps.HG_PORTAL_CFG_MAP, MAP_PATH(HG_PORTAL_CFG_MAP));
 
     /* ── load — libbpf will pin each map to its set_pin_path on load ── */
     if (hg_tc_bpf__load(skel))
@@ -272,6 +273,21 @@ int start_action(const char *iface)
 
     printf("hgctl: upload EDT shaping enabled (ifb_hg, ifindex=%u)\n", ifb_ifindex);
     close(ifb_fd);
+
+    int portal_fd = bpf_obj_get(MAP_PATH(HG_PORTAL_CFG_MAP));
+    if (portal_fd < 0)
+    {
+        fprintf(stderr, "hgctl: could not open portal config map\n");
+        return FAILED;
+    }
+
+    __u32 portal_key = 0;
+    if (bpf_map_update_elem(portal_fd, &portal_key, &portal_ifindex, BPF_ANY))
+    {
+        fprintf(stderr, "hgctl: portal config map update failed\n");
+        close(portal_fd);
+        return FAILED;
+    }
     return SUCCESS;
 }
 

@@ -4,21 +4,31 @@
 /*******************************************************************************************
                                 START & STOP ACTION
 *******************************************************************************************/
-static struct option iface_opts[] = {
+static struct option start_opts[] = {
     {"iface", required_argument, 0, 'i'},
+    {"portal-port", required_argument, 0, 'p'},
+    {"portal-ip", required_argument, 0, 'P'},
     {0, 0, 0, 0}};
 
 int parse_start(int argc, char **argv, const char *prog)
 {
     char iface[16] = {0};
+    char portal_ip[16] = {0};
+    __u16 portal_port = 0;
     int c;
 
-    while ((c = getopt_long(argc, argv, "i:", iface_opts, NULL)) != -1)
+    while ((c = getopt_long(argc, argv, "i:P:p:", start_opts, NULL)) != -1)
     {
         switch (c)
         {
         case 'i':
             strncpy(iface, optarg, sizeof(iface) - 1);
+            break;
+        case 'P':
+            strncpy(portal_ip, optarg, sizeof(portal_ip) - 1);
+            break;
+        case 'p':
+            portal_port = atoi(optarg);
             break;
         default:
             printf("Unknown option\n");
@@ -27,14 +37,18 @@ int parse_start(int argc, char **argv, const char *prog)
         }
     }
 
-    if (!iface[0])
+    if (!iface[0] || !portal_ip[0] || !portal_port)
     {
         print_start_help(prog);
         return FAILED;
     }
 
-    return start_action(iface);
+    return start_action(iface, portal_ip, portal_port);
 }
+
+static struct option iface_opts[] = {
+    {"iface", required_argument, 0, 'i'},
+    {0, 0, 0, 0}};
 
 int parse_stop(int argc, char **argv, const char *prog)
 {
@@ -348,13 +362,15 @@ void print_start_help(const char *prog)
 {
     printf(
         "Command: start\n"
-        "  %s start -i <iface>\n"
+        "  %s start -i <iface> -P <portal_ip> -p <portal_port>\n"
         "\n"
         "Options:\n"
         "  -i, --iface <iface>   Network interface (e.g. br0)\n"
+        "  -P, --portal-ip <ip>  Portal IP address\n"
+        "  -p, --portal-port <port> Portal port number\n"
         "\n"
         "Example:\n"
-        "  %s start -i br0\n"
+        "  %s start -i br0 -P 192.168.1.1 -p 8080\n"
         "\n",
         prog, prog);
 }

@@ -30,6 +30,8 @@
 #define HG_L2_ALLOW_MAP     hg_l2_allow
 #define HG_COUNTER_MAP      hg_counters
 #define HG_IFB_IDX_MAP      hg_ifb_idx
+#define HG_PORTAL_CFG_MAP   hg_portal_cfg_map
+
 
 /* ─── BPF pin directory ────────────────────────────────────────────────────────
  * All maps live under /sys/fs/bpf/hg/ — one subdir, easy to list and wipe.
@@ -107,6 +109,13 @@ struct hg_allow_key {
     __u16 s_port;   /* source port; 0 = wildcard                              */
     __u16 d_port;   /* destination port; 0 = wildcard                         */
     __u32 pad;      /* MUST be zeroed — BPF map key includes padding bytes     */
+};
+
+/* ─── Portal redirect config (hg_portal_cfg_map) ──────────────────────────── */
+struct hg_portal_cfg {
+    __u32 portal_ip;    /* network byte order — from g_config.portal_ip  */
+    __u16 portal_port;  /* network byte order — from g_config.http_port  */
+    __u16 pad;          /* explicit alignment padding — must be zero      */
 };
 
 #endif /* HG_COMMON_H */

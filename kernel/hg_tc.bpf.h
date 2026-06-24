@@ -14,14 +14,6 @@
 #define ETH_P_IP     0x0800
 #define ETH_P_ARP    0x0806
 
-/* ─── Portal redirect target ───────────────────────────────────────────────── *
- * TODO: move PORTAL_IP and PORTAL_PORT into a BPF map so hawkgated can        *
- * configure them at runtime without recompiling.                               *
- * Current value: 0xC0A86416 = 192.168.100.22, port 2050.                      *
- * ---------------------------------------------------------------------------- */
-#define PORTAL_PORT  2050
-#define PORTAL_IP    bpf_htonl(0xC0A86416)   /* 192.168.100.22 */
-
 /* ─── Packet classification result ────────────────────────────────────────── */
 enum proto_result {
     PROTO_L2_ONLY,   /* non-IP EtherType — check hg_l2_allow only            */
