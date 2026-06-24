@@ -24,7 +24,7 @@ enum proto_result {
 
 /* forward declarations */
 static __always_inline bool proto_allowed(struct hg_allow_key *k);
-static __always_inline int  redirect_to_portal(struct __sk_buff *skb);
+static __always_inline int redirect_to_portal(struct __sk_buff *skb, struct hg_portal_cfg *cfg);
 
 /* ─── parse_udp_tcp ────────────────────────────────────────────────────────── *
  * Extracts source and destination ports from a UDP or TCP header into key.    *
