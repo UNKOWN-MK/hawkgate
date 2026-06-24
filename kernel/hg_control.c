@@ -282,7 +282,9 @@ int start_action(const char *iface, const char *portal_ip, __u16 portal_port)
     }
 
     __u32 portal_key = 0;
-    if (bpf_map_update_elem(portal_fd, &portal_key, &portal_ifindex, BPF_ANY))
+    struct hg_portal_cfg portal_info = {0};
+    inet_pton(AF_INET, portal_ip, &portal_info.portal_ip);
+    if (bpf_map_update_elem(portal_fd, &portal_key, &portal_info, BPF_ANY))
     {
         fprintf(stderr, "hgctl: portal config map update failed\n");
         close(portal_fd);
