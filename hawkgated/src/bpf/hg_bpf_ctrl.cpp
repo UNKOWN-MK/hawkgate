@@ -82,6 +82,8 @@ bool HgBpfCtrl::start_hgctl()
     const char* argv[] = {
         "hgctl", "start",
         "-i", g_config.iface_name.c_str(),
+        "-P", g_config.portal_ip.c_str(),
+        "-p", std::to_string(g_config.http_port).c_str(),
         nullptr
     };
     return exec_cmd(argv);
