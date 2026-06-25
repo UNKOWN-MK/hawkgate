@@ -6,7 +6,6 @@ char LICENSE[] SEC("license") = "GPL";
 /* ─── BPF map definitions ──────────────────────────────────────────────────── *
  * All maps use the macro names from hg_common.h so a rename there propagates  *
  * here automatically. Maps are pinned under /sys/fs/bpf/hg/ via               *
- * LIBBPF_PIN_BY_NAME, which uses the C identifier as the filename.            *
  * ---------------------------------------------------------------------------- */
 
 /* Rate profiles: rate_id → hg_rate_cfg */
@@ -16,7 +15,6 @@ struct
   __uint(max_entries, 256);
   __type(key, __u32);
   __type(value, struct hg_rate_cfg);
-  __uint(pinning, LIBBPF_PIN_BY_NAME);
 } HG_RATE_MAP SEC(".maps");
 
 /* L2 EtherType allow-list: ethertype → __u8 (1 = allow) */
@@ -26,7 +24,6 @@ struct
   __uint(max_entries, 16);
   __type(key, __u16);
   __type(value, __u8);
-  __uint(pinning, LIBBPF_PIN_BY_NAME);
 } HG_L2_ALLOW_MAP SEC(".maps");
 
 /* L3/L4 protocol allow-list: hg_allow_key → __u8 (1 = allow) */
@@ -36,7 +33,6 @@ struct
   __uint(max_entries, 64);
   __type(key, struct hg_allow_key);
   __type(value, __u8);
-  __uint(pinning, LIBBPF_PIN_BY_NAME);
 } HG_PROTO_MAP SEC(".maps");
 
 /* Per-client auth + EDT state: src_ip → hg_client
@@ -47,7 +43,6 @@ struct
   __uint(max_entries, 4096);
   __type(key, __u32);
   __type(value, struct hg_client);
-  __uint(pinning, LIBBPF_PIN_BY_NAME);
 } HG_CLIENT_MAP SEC(".maps");
 
 /* Per-CPU byte/packet counters: src_ip → hg_counter (per CPU) */
@@ -57,7 +52,6 @@ struct
   __uint(max_entries, 4096);
   __type(key, __u32);
   __type(value, struct hg_counter);
-  __uint(pinning, LIBBPF_PIN_BY_NAME);
 } HG_COUNTER_MAP SEC(".maps");
 
 /* IFB interface index for upload EDT shaping (0 = IFB not configured) */
@@ -67,7 +61,6 @@ struct
   __uint(max_entries, 1);
   __type(key, __u32);
   __type(value, __u32);
-  __uint(pinning, LIBBPF_PIN_BY_NAME);
 } HG_IFB_IDX_MAP SEC(".maps");
 
 /* Portal IP/port config — single entry, written by hawkgated at startup */
@@ -77,7 +70,6 @@ struct
   __uint(max_entries, 1);
   __type(key, __u32);
   __type(value, struct hg_portal_cfg);
-  __uint(pinning, LIBBPF_PIN_BY_NAME);
 } HG_PORTAL_CFG_MAP SEC(".maps");
 
 /* ─── apply_edt_shaping ────────────────────────────────────────────────────── *
@@ -146,10 +138,10 @@ int hg_tc_ingress(struct __sk_buff *skb)
   struct hg_allow_key p_allow = {0};
   __u16 eth_proto;
 
-  int res = filter_proto(data, data_end, &iph, &p_allow, &eth_proto);
+  int res_filter_p = filter_proto(data, data_end, &iph, &p_allow, &eth_proto);
 
   /* 1 — L2 allow check */
-  if (res == PROTO_L2_ONLY)
+  if (res_filter_p == PROTO_L2_ONLY)
   {
     __u8 *l2_ok = bpf_map_lookup_elem(&HG_L2_ALLOW_MAP, &eth_proto);
     if (!l2_ok)
@@ -159,7 +151,7 @@ int hg_tc_ingress(struct __sk_buff *skb)
     }
     return TC_ACT_OK;
   }
-  if (res == PROTO_INVALID)
+  if (res_filter_p == PROTO_INVALID)
   {
     bpf_printk("hg ingress: drop malformed packet\n");
     return TC_ACT_SHOT;
@@ -172,13 +164,14 @@ int hg_tc_ingress(struct __sk_buff *skb)
   {
     if (iph->daddr == cfg->portal_ip)
     {
-       if (iph->protocol == IPPROTO_TCP)
+      if (iph->protocol == IPPROTO_TCP)
       {
         struct tcphdr *tcph = (void *)(iph + 1);
-        if ((void *)(tcph + 1) <= data_end &&
-            tcph->dest == cfg->portal_port)
+        if ((void *)(tcph + 1) <= data_end && tcph->dest == cfg->portal_port)
           return TC_ACT_OK;
       }
+      bpf_printk("hg ingress: drop portal ip but not portal port\n");
+      return TC_ACT_SHOT;
     }
    
   }
@@ -231,9 +224,15 @@ int hg_tc_ingress(struct __sk_buff *skb)
   if (proto_allowed(&p_allow))
     return TC_ACT_OK;
 
+  if(p_allow.proto != IPPROTO_TCP || p_allow.d_port != 80)
+  {
+    bpf_printk("hg ingress: drop not http pkts\n");
+    return TC_ACT_SHOT;
+  }
   /* 5 — redirect everything else to captive portal */
-  if (!cfg)
+  if (!cfg) //this condition for just verifier friendly
     return TC_ACT_OK;
+  
   bpf_printk("hg ingress: redirecting to portal\n");
   return redirect_to_portal(skb,cfg);
 }
@@ -259,10 +258,10 @@ int hg_tc_egress(struct __sk_buff *skb)
   struct hg_allow_key p_allow = {0};
   __u16 eth_proto;
 
-  int res = filter_proto(data, data_end, &iph, &p_allow, &eth_proto);
+  int res_filter_p = filter_proto(data, data_end, &iph, &p_allow, &eth_proto);
 
   /* 1 — L2 allow check */
-  if (res == PROTO_L2_ONLY)
+  if (res_filter_p == PROTO_L2_ONLY)
   {
     __u8 *l2_ok = bpf_map_lookup_elem(&HG_L2_ALLOW_MAP, &eth_proto);
     if (!l2_ok)
@@ -272,7 +271,7 @@ int hg_tc_egress(struct __sk_buff *skb)
     }
     return TC_ACT_OK;
   }
-  if (res == PROTO_INVALID)
+  if (res_filter_p == PROTO_INVALID)
   {
     bpf_printk("hg egress: drop malformed packet\n");
     return TC_ACT_SHOT;
@@ -367,6 +366,9 @@ static __always_inline bool proto_allowed(struct hg_allow_key *k)
  * ---------------------------------------------------------------------------- */
 static __always_inline int redirect_to_portal(struct __sk_buff *skb, struct hg_portal_cfg *cfg)
 {
+  if (bpf_skb_pull_data(skb, 0) < 0)
+    return TC_ACT_OK;
+  
   void *data = (void *)(long)skb->data;
   void *data_end = (void *)(long)skb->data_end;
 
