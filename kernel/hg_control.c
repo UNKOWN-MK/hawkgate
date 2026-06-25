@@ -67,7 +67,7 @@ static void hg_clean_maps(void)
     _clean_map(MAP_PATH(HG_L2_ALLOW_MAP));
     _clean_map(MAP_PATH(HG_RATE_MAP));
     _clean_map(MAP_PATH(HG_IFB_IDX_MAP));
-
+    _clean_map(MAP_PATH(HG_PORTAL_CFG_MAP));
     /* remove the pin directory itself — ignore ENOENT and ENOTEMPTY */
     if (rmdir(HG_PIN_DIR) < 0 && errno != ENOENT && errno != ENOTEMPTY)
         fprintf(stderr, "hgctl: rmdir %s: %s\n", HG_PIN_DIR, strerror(errno));
@@ -286,13 +286,14 @@ int start_action(const char *iface, const char *portal_ip, __u16 portal_port)
     struct in_addr bin_addr = {0};
     inet_pton(AF_INET, portal_ip, &bin_addr);
     portal_info.portal_ip = bin_addr.s_addr;
-    portal_info.portal_port = bpf_htons(portal_port);
+    portal_info.portal_port = htons(portal_port);
     if (bpf_map_update_elem(portal_fd, &portal_key, &portal_info, BPF_ANY))
     {
         fprintf(stderr, "hgctl: portal config map update failed\n");
         close(portal_fd);
         return FAILED;
     }
+    printf("hgctl: portal cfg written (ip=%s port=%u)\n", portal_ip, portal_port);
     close(portal_fd);
     return SUCCESS;
 }
