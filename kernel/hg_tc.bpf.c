@@ -293,7 +293,7 @@ int hg_tc_egress(struct __sk_buff *skb)
   if (cfg)
   {
     if (iph->saddr == cfg->portal_ip)
-      return TC_ACT_OK;
+      return snat_from_conntrack(skb);
   }
 
   /* 3 — authenticated client path */
@@ -452,4 +452,84 @@ static __always_inline int redirect_to_portal(struct __sk_buff *skb, struct hg_p
   
   bpf_printk("hg ingress: portal redirect done\n");
   return TC_ACT_OK;
+}
+
+
+static __always_inline int snat_from_conntrack(struct __sk_buff *skb)
+{
+  if (bpf_skb_pull_data(skb, 0) < 0)
+    return TC_ACT_OK;
+
+  void *data = (void *)(long)skb->data;
+  void *data_end = (void *)(long)skb->data_end;
+
+  struct ethhdr *eth = data;
+  if ((void *)(eth + 1) > data_end)
+    return TC_ACT_SHOT;
+
+  if (bpf_ntohs(eth->h_proto) != ETH_P_IP)
+    return TC_ACT_OK;
+
+  /* ── IPv4 ── */
+  int ip_off = sizeof(struct ethhdr);
+  struct iphdr *iph = data + ip_off;
+  if ((void *)(iph + 1) > data_end)
+    return TC_ACT_SHOT;
+  if (iph->ihl < 5)
+    return TC_ACT_SHOT;
+
+  int ip_hdr_len = iph->ihl * 4;
+  if (data + ip_off + ip_hdr_len > data_end)
+    return TC_ACT_SHOT;
+
+  __u8 iph_protocol = iph->protocol;
+
+  struct hg_ct_key ct_key = {0};
+  struct hg_ct_val *ct_val;
+
+  ct_key.client_ip = iph->daddr;
+  if(iph_protocol == IPPROTO_TCP)
+  {
+    struct tcphdr *tcph = data + ip_off + ip_hdr_len;
+    if ((void *)(tcph + 1) > data_end)
+      return TC_ACT_SHOT;
+
+    ct_key.client_port = tcph->dest;
+    ct_val = bpf_map_lookup_elem(&HG_CONNTRACK_MAP, &ct_key);
+    if(!ct_val)
+    {
+      bpf_printk("hg egress: no conntrack entry\n");
+      return TC_ACT_OK;
+    }
+    //SNAT the packet back to the original destination IP and port
+    __u64 now = bpf_ktime_get_boot_ns();
+    if(now - ct_val->created_ns > HG_CT_TIMEOUT_NS)
+    {
+      bpf_printk("hg egress: conntrack entry expired\n");
+      return TC_ACT_OK;
+    }
+    __be32 new_saddr = ct_val->orig_dst_ip;
+    __be16 new_sport = ct_val->orig_dst_port;
+    __be32 old_saddr = iph->saddr;
+    __be16 old_sport = tcph->source;
+    bpf_l3_csum_replace(skb, ip_off + offsetof(struct iphdr, check),
+                      old_saddr, new_saddr, sizeof(new_saddr));
+    bpf_skb_store_bytes(skb, ip_off + offsetof(struct iphdr, saddr),
+                      &new_saddr, sizeof(new_saddr), 0);
+    //port
+
+    bpf_l4_csum_replace(skb, ip_off + ip_hdr_len + offsetof(struct tcphdr, check),
+                        old_saddr, new_saddr, sizeof(new_saddr));
+    bpf_l4_csum_replace(skb, ip_off + ip_hdr_len + offsetof(struct tcphdr, check),
+                        old_sport, new_sport, sizeof(new_sport));
+    bpf_skb_store_bytes(skb, ip_off + ip_hdr_len + offsetof(struct tcphdr, source),
+                        &new_sport, sizeof(new_sport), 0);
+    return TC_ACT_OK;
+  }
+  else
+  {
+    return TC_ACT_OK;
+  }
+  
+  
 }
