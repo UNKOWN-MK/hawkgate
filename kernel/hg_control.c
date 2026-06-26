@@ -68,6 +68,7 @@ static void hg_clean_maps(void)
     _clean_map(MAP_PATH(HG_RATE_MAP));
     _clean_map(MAP_PATH(HG_IFB_IDX_MAP));
     _clean_map(MAP_PATH(HG_PORTAL_CFG_MAP));
+    _clean_map(MAP_PATH(HG_CONNTRACK_MAP));
     /* remove the pin directory itself — ignore ENOENT and ENOTEMPTY */
     if (rmdir(HG_PIN_DIR) < 0 && errno != ENOENT && errno != ENOTEMPTY)
         fprintf(stderr, "hgctl: rmdir %s: %s\n", HG_PIN_DIR, strerror(errno));
@@ -176,6 +177,7 @@ int start_action(const char *iface, const char *portal_ip, __u16 portal_port)
     bpf_map__set_pin_path(skel->maps.HG_L2_ALLOW_MAP, MAP_PATH(HG_L2_ALLOW_MAP));
     bpf_map__set_pin_path(skel->maps.HG_IFB_IDX_MAP, MAP_PATH(HG_IFB_IDX_MAP));
     bpf_map__set_pin_path(skel->maps.HG_PORTAL_CFG_MAP, MAP_PATH(HG_PORTAL_CFG_MAP));
+    bpf_map__set_pin_path(skel->maps.HG_CONNTRACK_MAP, MAP_PATH(HG_CONNTRACK_MAP));
 
     /* ── load — libbpf will pin each map to its set_pin_path on load ── */
     if (hg_tc_bpf__load(skel))
