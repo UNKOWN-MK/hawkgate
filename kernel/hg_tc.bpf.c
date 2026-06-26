@@ -72,6 +72,16 @@ struct
   __type(value, struct hg_portal_cfg);
 } HG_PORTAL_CFG_MAP SEC(".maps");
 
+/* Conntrack map — for tracking redirected TCP flows */
+struct
+{
+  __uint(type, BPF_MAP_TYPE_LRU_HASH);
+  __uint(max_entries, 512);
+  __type(key, struct hg_ct_key);
+  __type(value, struct hg_ct_val);
+} HG_CONNTRACK_MAP SEC(".maps");
+
+
 /* ─── apply_edt_shaping ────────────────────────────────────────────────────── *
  * Computes the next EDT departure timestamp for this packet and stamps it into *
  * skb->tstamp. The FQ qdisc holds the packet until that time arrives.         *
@@ -391,15 +401,23 @@ static __always_inline int redirect_to_portal(struct __sk_buff *skb, struct hg_p
   if (data + ip_off + ip_hdr_len > data_end)
     return TC_ACT_SHOT;
 
+    struct hg_ct_key ct_key = {0};
+    struct hg_ct_val ct_val = {0};
+
   __be32 new_daddr = cfg->portal_ip;
   __be16 new_dport = cfg->portal_port;
 
-  __be32 old_daddr = iph->daddr;
-  __be16 iph_protocol = iph->protocol;
+  //read the original header details before we overwrite them
+  //And store them in the conntrack map for later use
+  ct_val.orig_dst_ip = iph->daddr;
+  ct_key.client_ip = iph->saddr;
+  ct_val.created_ns = bpf_ktime_get_boot_ns();
+
+  __u8 iph_protocol = iph->protocol;
 
   /* fix IP checksum, then write new dst IP */
   bpf_l3_csum_replace(skb, ip_off + offsetof(struct iphdr, check),
-                      old_daddr, new_daddr, sizeof(new_daddr));
+                      ct_val.orig_dst_ip, new_daddr, sizeof(new_daddr));
   bpf_skb_store_bytes(skb, ip_off + offsetof(struct iphdr, daddr),
                       &new_daddr, sizeof(new_daddr), 0);
 
@@ -415,39 +433,23 @@ static __always_inline int redirect_to_portal(struct __sk_buff *skb, struct hg_p
     struct tcphdr *tcph = data1 + l4_off;
     if ((void *)(tcph + 1) > data_end1)
       return TC_ACT_SHOT;
+    
+    //read the original header tcp ports before we overwrite them
+    ct_val.orig_dst_port = tcph->dest;
+    ct_key.client_port = tcph->source;
 
-    __be16 old_dport = tcph->dest;
+    //Let's track the connection ,update to the conntrack map
+    bpf_map_update_elem(&HG_CONNTRACK_MAP, &ct_key, &ct_val, BPF_ANY);
 
+    //DNAT the packet to the portal IP and port
     bpf_l4_csum_replace(skb, l4_off + offsetof(struct tcphdr, check),
-                        old_daddr, new_daddr, sizeof(new_daddr));
+                        ct_val.orig_dst_ip, new_daddr, sizeof(new_daddr));
     bpf_l4_csum_replace(skb, l4_off + offsetof(struct tcphdr, check),
-                        old_dport, new_dport, sizeof(new_dport));
+                        ct_val.orig_dst_port, new_dport, sizeof(new_dport));
     bpf_skb_store_bytes(skb, l4_off + offsetof(struct tcphdr, dest),
                         &new_dport, sizeof(new_dport), 0);
   }
-  else if (iph_protocol == IPPROTO_UDP)
-  {
-    /* re-fetch after store_bytes invalidated pointers */
-    void *data1 = (void *)(long)skb->data;
-    void *data_end1 = (void *)(long)skb->data_end;
-
-    struct udphdr *udph = data1 + l4_off;
-    if ((void *)(udph + 1) > data_end1)
-      return TC_ACT_SHOT;
-
-    __be16 old_dport = udph->dest;
-
-    if (udph->check)
-    {
-      bpf_l4_csum_replace(skb, l4_off + offsetof(struct udphdr, check),
-                          old_daddr, new_daddr, sizeof(new_daddr));
-      bpf_l4_csum_replace(skb, l4_off + offsetof(struct udphdr, check),
-                          old_dport, new_dport, sizeof(new_dport));
-    }
-    bpf_skb_store_bytes(skb, l4_off + offsetof(struct udphdr, dest),
-                        &new_dport, sizeof(new_dport), 0);
-  }
-
+  
   bpf_printk("hg ingress: portal redirect done\n");
   return TC_ACT_OK;
 }
