@@ -37,7 +37,8 @@ typedef enum {
     DEL      = 4,
     SHOW     = 5,
     DETAILS  = 6,
-    PROTOCOL = 7
+    PROTOCOL = 7,
+    MAP_DEL  = 8
 } action_opcode;
 
 /* ─── Pre-auth protocol rule (userspace only) ──────────────────────────────── */
@@ -65,6 +66,8 @@ int parse_del(int argc, char **argv, const char *prog);
 int parse_proto(int argc, char **argv, const char *prog);
 int parse_show(int argc, char **argv, const char *prog);
 int parse_details(int argc, char **argv, const char *prog);
+int parse_map_del(int argc, char **argv, const char *prog);
+
 
 /* ─── Help print functions (hg_cli.c) ─────────────────────────────────────── */
 void print_help(const char *prog);
@@ -75,6 +78,7 @@ void print_del_help(const char *prog);
 void print_show_help(const char *prog);
 void print_details_help(const char *prog);
 void print_proto_help(const char *prog);
+void print_map_del_help(const char *prog);
 
 /* ─── Action functions (hg_control.c) ─────────────────────────────────────── */
 int start_action(const char *iface, const char *portal_ip, __u16 portal_port);
@@ -89,6 +93,7 @@ int  details_one_action(const char *iface, const char *ip);
 int  protocol_allow_add_action(struct proto_rule *rule);
 int  protocol_allow_del_action(struct proto_rule *rule);
 bool hg_get_rate_cfg(__u32 rate_id, struct hg_rate_cfg *out);
+int map_del_action(const char *map_name, const char *key_spec);
 void show_protocols(void);
 
 #endif /* HG_USER_H */

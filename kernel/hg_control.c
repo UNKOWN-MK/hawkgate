@@ -87,6 +87,7 @@ static const struct
     {"show", SHOW},
     {"details", DETAILS},
     {"proto", PROTOCOL},
+    {"map-del", MAP_DEL},
     {NULL, BAD_OP}};
 
 /* ─── main ─────────────────────────────────────────────────────────────────── */
@@ -119,6 +120,9 @@ int main(int argc, char **argv)
         return parse_details(argc, argv, prog);
     case PROTOCOL:
         return parse_proto(argc, argv, prog);
+    case MAP_DEL:  
+        return parse_map_del(argc, argv, prog);
+
     default:
         print_help(prog);
         return FAILED;
@@ -286,7 +290,12 @@ int start_action(const char *iface, const char *portal_ip, __u16 portal_port)
     __u32 portal_key = 0;
     struct hg_portal_cfg portal_info = {0};
     struct in_addr bin_addr = {0};
-    inet_pton(AF_INET, portal_ip, &bin_addr);
+    if (inet_pton(AF_INET, portal_ip, &bin_addr) != 1)
+    {
+      fprintf(stderr, "hgctl: invalid portal IP '%s'\n", portal_ip);
+      close(portal_fd);
+      return FAILED;
+    }
     portal_info.portal_ip = bin_addr.s_addr;
     portal_info.portal_port = htons(portal_port);
     if (bpf_map_update_elem(portal_fd, &portal_key, &portal_info, BPF_ANY))
@@ -821,4 +830,121 @@ action_opcode hg_parse_opcode(const char *cmd)
 
     fprintf(stderr, "hgctl: unknown command '%s'\n", cmd);
     return BAD_OP;
+}
+
+int map_del_action(const char *map_name, const char *key_spec)
+{
+    char path[128];
+    snprintf(path, sizeof(path), "%s/%s", HG_PIN_DIR, map_name);
+
+    int fd = bpf_obj_get(path);
+    if (fd < 0)
+    {
+        fprintf(stderr, "hgctl: map-del — cannot open map '%s': %s\n",
+                map_name, strerror(errno));
+        return FAILED;
+    }
+
+    int ret = FAILED;
+
+    /* ── hg_conntrack: key format "ip:port" ── */
+    if (strcmp(map_name, XSTR(HG_CONNTRACK_MAP)) == 0)
+    {
+        char ip_buf[16] = {0};
+        char *colon = strchr(key_spec, ':');
+        if (!colon)
+        {
+            fprintf(stderr, "hgctl: map-del hg_conntrack: key must be <ip>:<port>\n");
+            goto done;
+        }
+        size_t ip_len = (size_t)(colon - key_spec);
+        if (ip_len >= sizeof(ip_buf))
+        {
+            fprintf(stderr, "hgctl: map-del: IP too long\n");
+            goto done;
+        }
+        strncpy(ip_buf, key_spec, ip_len);
+
+        struct hg_ct_key key = {0};   /* zero entire struct — pad must be zero */
+        if (inet_pton(AF_INET, ip_buf, &key.client_ip) != 1)
+        {
+            fprintf(stderr, "hgctl: map-del: invalid IP '%s'\n", ip_buf);
+            goto done;
+        }
+        key.client_port = htons((__u16)atoi(colon + 1));
+
+        if (bpf_map_delete_elem(fd, &key) == 0)
+        {
+            printf("hgctl: map-del hg_conntrack %s — removed\n", key_spec);
+            ret = SUCCESS;
+        }
+        else
+        {
+            fprintf(stderr, "hgctl: map-del hg_conntrack %s — not found\n", key_spec);
+        }
+    }
+
+    /* ── hg_clients: key format "ip" ── */
+    else if (strcmp(map_name, XSTR(HG_CLIENT_MAP)) == 0)
+    {
+        __u32 ip_key;
+        if (inet_pton(AF_INET, key_spec, &ip_key) != 1)
+        {
+            fprintf(stderr, "hgctl: map-del: invalid IP '%s'\n", key_spec);
+            goto done;
+        }
+        if (bpf_map_delete_elem(fd, &ip_key) == 0)
+        {
+            printf("hgctl: map-del hg_clients %s — removed\n", key_spec);
+            ret = SUCCESS;
+        }
+        else
+        {
+            fprintf(stderr, "hgctl: map-del hg_clients %s — not found\n", key_spec);
+        }
+    }
+
+    /* ── hg_proto: key format "proto:sport:dport" ── */
+    else if (strcmp(map_name, XSTR(HG_PROTO_MAP)) == 0)
+    {
+        char tmp[32];
+        strncpy(tmp, key_spec, sizeof(tmp) - 1);
+        char *p = strtok(tmp, ":");
+        char *s = strtok(NULL, ":");
+        char *d = strtok(NULL, ":");
+
+        if (!p || !s || !d)
+        {
+            fprintf(stderr, "hgctl: map-del hg_proto: key must be <proto>:<sport>:<dport>\n");
+            goto done;
+        }
+
+        struct hg_allow_key key = {0};
+        key.proto  = (__u8)atoi(p);
+        key.s_port = (__u16)atoi(s);
+        key.d_port = (__u16)atoi(d);
+
+        if (bpf_map_delete_elem(fd, &key) == 0)
+        {
+            printf("hgctl: map-del hg_proto %s — removed\n", key_spec);
+            ret = SUCCESS;
+        }
+        else
+        {
+            fprintf(stderr, "hgctl: map-del hg_proto %s — not found\n", key_spec);
+        }
+    }
+
+    else
+    {
+        fprintf(stderr, "hgctl: map-del: unknown map '%s'\n", map_name);
+        fprintf(stderr, "  supported: %s  %s  %s\n",
+                XSTR(HG_CONNTRACK_MAP),
+                XSTR(HG_CLIENT_MAP),
+                XSTR(HG_PROTO_MAP));
+    }
+
+done:
+    close(fd);
+    return ret;
 }

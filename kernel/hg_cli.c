@@ -498,6 +498,7 @@ void print_help(const char *prog)
         "  show      Show per-client traffic counters\n"
         "  details   Show detailed client info (state, rate, age)\n"
         "  proto     Manage pre-auth protocol allow rules\n"
+        "  map-del   Delete an entry from a BPF map by key\n"
         "\n",
         prog);
 
@@ -508,6 +509,7 @@ void print_help(const char *prog)
     print_show_help(prog);
     print_details_help(prog);
     print_proto_help(prog);
+    print_map_del_help(prog);
 
     printf(
         "Notes:\n"
@@ -516,4 +518,62 @@ void print_help(const char *prog)
         "  - All protocol values are numeric (no names accepted)\n"
         "  - Enforcement happens in the kernel datapath via eBPF TC hooks\n"
         "\n");
+}
+
+/*******************************************************************************************
+                                MAP DELETE ACTION
+*******************************************************************************************/
+static struct option map_del_opts[] = {
+    {"map", required_argument, 0, 'm'},
+    {"key", required_argument, 0, 'k'},
+    {0, 0, 0, 0}
+};
+
+int parse_map_del(int argc, char **argv, const char *prog)
+{
+    char map_name[32] = {0};
+    char key_spec[64] = {0};
+    int c;
+
+    while ((c = getopt_long(argc, argv, "m:k:", map_del_opts, NULL)) != -1)
+    {
+        switch (c)
+        {
+        case 'm':
+            strncpy(map_name, optarg, sizeof(map_name) - 1);
+            break;
+        case 'k':
+            strncpy(key_spec, optarg, sizeof(key_spec) - 1);
+            break;
+        default:
+            print_map_del_help(prog);
+            return FAILED;
+        }
+    }
+
+    if (!map_name[0] || !key_spec[0])
+    {
+        print_map_del_help(prog);
+        return FAILED;
+    }
+
+    return map_del_action(map_name, key_spec);
+}
+
+void print_map_del_help(const char *prog)
+{
+    printf(
+        "Command: map-del\n"
+        "  %s map-del --map <map_name> --key <key_spec>\n"
+        "\n"
+        "Supported maps and key formats:\n"
+        "  hg_conntrack   <ip>:<port>        e.g. 192.168.100.50:54321\n"
+        "  hg_clients     <ip>               e.g. 192.168.100.50\n"
+        "  hg_proto       <proto>:<sport>:<dport>  e.g. 6:0:80\n"
+        "\n"
+        "Examples:\n"
+        "  %s map-del --map hg_conntrack --key 192.168.100.50:54321\n"
+        "  %s map-del --map hg_clients   --key 192.168.100.50\n"
+        "\n",
+        prog, prog, prog);
 }
