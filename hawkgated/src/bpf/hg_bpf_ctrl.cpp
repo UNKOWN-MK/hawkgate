@@ -137,3 +137,14 @@ bool HgBpfCtrl::deauthenticate(const std::string &ip)
       nullptr};
   return exec_cmd(argv);
 }
+
+bool HgBpfCtrl::map_ele_del(const std::string &map_name, const std::string &key)
+{
+  const char *argv[] = {
+      "hgctl", "map-del",
+      "--map", map_name.c_str(),
+      "--key", key.c_str(),
+      nullptr
+  };
+  return exec_cmd(argv);
+}

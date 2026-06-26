@@ -3,12 +3,15 @@
 #include "hg_auth.h"
 #include "hg_portal.h"
 
-std::string route(const HttpRequest &req, const std::string &client_ip)
+std::string route(const HttpRequest &req, const std::string &client_ip, uint16_t client_port)
 {
-  log_debug("Routing request from ");
+  std::string msg = "route: " + req.method + " " + req.path +
+   " from " + client_ip + ":" + std::to_string(client_port);
+  
+  log_debug(msg.c_str());
   if (req.path == "/login")
   {
-    return handle_auth(req, client_ip);
+    return handle_auth(req, client_ip, client_port);
   }
   else if (req.path == "/portal")
   {

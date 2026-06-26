@@ -41,6 +41,7 @@ typedef struct client_auth
   uint32_t idle_sec;
   uint32_t dn_rate;
   uint32_t up_rate;
+  uint16_t client_port;
 } client_auth;
 
 class HgBpfCtrl
@@ -52,6 +53,7 @@ public:
   bool stop_hgctl();
   bool authenticate(const client_auth &);
   bool deauthenticate(const std::string &ip);
+  bool map_ele_del(const std::string &map_name, const std::string &key);
 };
 
 #endif // end of the fil

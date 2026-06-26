@@ -6,6 +6,6 @@
 #include <string>
 
 void init_auth(AuthProvider *p, HgBpfCtrl *b);
-std::string handle_auth(const HttpRequest& req, const std::string& client_ip);
+std::string handle_auth(const HttpRequest& req, const std::string& client_ip, uint16_t client_port);
 
 #endif // HG_AUTH_H

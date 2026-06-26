@@ -161,8 +161,9 @@ void HgServer::accept_connections()
     // Create HgConnection object for this client
     char ip_str[INET_ADDRSTRLEN];
     inet_ntop(AF_INET, &client_addr.sin_addr, ip_str, sizeof(ip_str));
-    connections[client_fd] = std::make_unique<HgConnection>(client_fd, std::string(ip_str));
-    std::string msg = "new connection: " + std::string(ip_str);
+    uint16_t port = client_addr.sin_port;
+    connections[client_fd] = std::make_unique<HgConnection>(client_fd, std::string(ip_str), port);
+    std::string msg = "new connection: " + std::string(ip_str) + ":" + std::to_string(port);
     log_debug(msg.c_str());
   }
 }
@@ -177,7 +178,7 @@ void HgServer::handle_readable(int fd)
 
   if (conn->state == ConnectionState::WRITING)
   {
-    std::string response = route(conn->parser.get_request(), conn->client_ip);
+    std::string response = route(conn->parser.get_request(), conn->client_ip, conn->client_port);
     conn->queue_response(response);
     struct epoll_event ev;
     ev.events = EPOLLOUT | EPOLLET;

@@ -28,7 +28,7 @@ void init_auth(AuthProvider *p, HgBpfCtrl *b)
   g_bpf      = b;
 }
 
-std::string handle_auth(const HttpRequest& req, const std::string& client_ip)
+std::string handle_auth(const HttpRequest& req, const std::string& client_ip, uint16_t client_port)
 {
   std::string username = parse_form_field(req.body, "username");
   std::string password = parse_form_field(req.body, "password");
@@ -41,6 +41,7 @@ std::string handle_auth(const HttpRequest& req, const std::string& client_ip)
   {
     client_auth auth;
     auth.ip = client_ip;
+    auth.client_port = client_port;
     auth.expiry_sec = result.expire_sec ? result.expire_sec : g_config.session_timeout;
     auth.dn_rate    = result.down_kbps  ? result.down_kbps  : g_config.d_rate;
     auth.up_rate    = result.up_kbps    ? result.up_kbps    : g_config.u_rate;
@@ -49,6 +50,12 @@ std::string handle_auth(const HttpRequest& req, const std::string& client_ip)
     {
         log_error("Failed to authenticate client in kernel");
         std::string response_body = "{\"message\": \"Authentication succeeded but failed to apply in kernel\"}";
+        return "HTTP/1.1 500 Internal Server Error\r\nContent-Type: application/json\r\nContent-Length: " + std::to_string(response_body.length()) + "\r\n\r\n" + response_body;
+    }
+    if (!g_bpf->map_ele_del("hg_conntrack", client_ip + ":" + std::to_string(client_port)))
+    {
+        log_error("Failed to delete portal config from kernel");
+        std::string response_body = "{\"message\": \"Authentication succeeded but failed to remove portal config in kernel\"}";
         return "HTTP/1.1 500 Internal Server Error\r\nContent-Type: application/json\r\nContent-Length: " + std::to_string(response_body.length()) + "\r\n\r\n" + response_body;
     }
     std::string response_body = "{\"message\": \"" + result.message + "\"}";
