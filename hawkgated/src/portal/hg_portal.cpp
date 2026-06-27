@@ -58,11 +58,18 @@ std::string handle_portal(const HttpRequest &req, const std::string &client_ip)
       return "HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\n\r\n";
     }
   }
-  if (host == g_config.gateway_fqdn)
+  std::string host_name = host.find(':') != std::string::npos ? host.substr(0, host.find(':')) : host;
+
+  if (host_name == g_config.gateway_fqdn)
   {
-    std::string body = "<html><body><h1>HawkGate Login</h1></body></html>";
+    std::string form_body = "<html><body><h1>HawkGate Login</h1>"
+                            "<form method=\"POST\" action=\"/login\">"
+                            "Username: <input type=\"text\" name=\"username\"><br>"
+                            "Password: <input type=\"password\" name=\"password\"><br>"
+                            "<input type=\"submit\" value=\"Login\">"
+                            "</form></body></html>";
     return "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nContent-Length: "
-           + std::to_string(body.size()) + "\r\n\r\n" + body;
+           + std::to_string(form_body.size()) + "\r\n\r\n" + form_body;
   }
   std::string loc = "http://" + g_config.gateway_fqdn + ":"
                 + std::to_string(g_config.http_port) + "/portal";

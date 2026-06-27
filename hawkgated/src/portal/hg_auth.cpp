@@ -54,9 +54,7 @@ std::string handle_auth(const HttpRequest& req, const std::string& client_ip, ui
     }
     if (!g_bpf->map_ele_del("hg_conntrack", client_ip + ":" + std::to_string(client_port)))
     {
-        log_error("Failed to delete portal config from kernel");
-        std::string response_body = "{\"message\": \"Authentication succeeded but failed to remove portal config in kernel\"}";
-        return "HTTP/1.1 500 Internal Server Error\r\nContent-Type: application/json\r\nContent-Length: " + std::to_string(response_body.length()) + "\r\n\r\n" + response_body;
+        log_warning("Failed to delete portal config from kernel");    
     }
     std::string response_body = "{\"message\": \"" + result.message + "\"}";
     return "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: " + std::to_string(response_body.length()) + "\r\n\r\n" + response_body;

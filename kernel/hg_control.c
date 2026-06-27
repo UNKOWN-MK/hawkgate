@@ -871,7 +871,7 @@ int map_del_action(const char *map_name, const char *key_spec)
             fprintf(stderr, "hgctl: map-del: invalid IP '%s'\n", ip_buf);
             goto done;
         }
-        key.client_port = htons((__u16)atoi(colon + 1));
+        key.client_port = (__u16)atoi(colon + 1);
 
         if (bpf_map_delete_elem(fd, &key) == 0)
         {
