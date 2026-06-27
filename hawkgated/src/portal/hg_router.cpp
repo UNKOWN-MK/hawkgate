@@ -17,6 +17,10 @@ std::string route(const HttpRequest &req, const std::string &client_ip, uint16_t
   {
     return handle_portal(req, client_ip);
   }
+  else if (req.path == "/portal/success")
+  {
+    return handle_success(req, client_ip);
+  }
   else if (req.path.find("/api/v1/") == 0)
   {
     return "HTTP/1.1 501 Not Implemented\r\nContent-Length: 0\r\n\r\n";

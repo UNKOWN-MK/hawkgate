@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HawkGate — Connect</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:        #0f1117;
+    --surface:   #1a1d27;
+    --border:    #2a2d3a;
+    --accent:    #4f8ef7;
+    --accent-h:  #3a78e8;
+    --text-1:    #f0f2f8;
+    --text-2:    #8b90a8;
+    --text-3:    #6b7090;
+    --radius:    14px;
+    --shadow:    0 24px 64px rgba(0,0,0,.55);
+  }
+
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+                 "Helvetica Neue", Arial, sans-serif;
+    color: var(--text-1);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  body {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    padding: 24px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  /* subtle radial glow behind the card */
+  body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    background:
+      radial-gradient(ellipse 60% 50% at 50% 40%,
+        rgba(79,142,247,.08) 0%, transparent 70%);
+    pointer-events: none;
+  }
+
+  /* faint grid lines */
+  body::after {
+    content: "";
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(255,255,255,.025) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,.025) 1px, transparent 1px);
+    background-size: 48px 48px;
+    pointer-events: none;
+  }
+
+  .card {
+    position: relative;
+    z-index: 1;
+    width: 100%;
+    max-width: 400px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 40px 36px 36px;
+    box-shadow: var(--shadow);
+  }
+
+  .logo {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 28px;
+  }
+
+  .logo-icon {
+    width: 36px;
+    height: 36px;
+    flex-shrink: 0;
+  }
+
+  .logo-text {
+    font-size: 20px;
+    font-weight: 600;
+    letter-spacing: -.3px;
+    color: var(--text-1);
+  }
+
+  .logo-text span {
+    color: var(--accent);
+  }
+
+  .divider {
+    height: 1px;
+    background: var(--border);
+    margin-bottom: 28px;
+  }
+
+  h1 {
+    font-size: 22px;
+    font-weight: 600;
+    letter-spacing: -.4px;
+    margin-bottom: 8px;
+    color: var(--text-1);
+  }
+
+  .subtitle {
+    font-size: 14px;
+    color: var(--text-2);
+    line-height: 1.6;
+    margin-bottom: 32px;
+  }
+
+  /* info row */
+  .info-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-bottom: 32px;
+  }
+
+  .info-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 13px;
+    color: var(--text-2);
+  }
+
+  .info-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--accent);
+    flex-shrink: 0;
+    opacity: .7;
+  }
+
+  /* connect button */
+  .btn {
+    display: block;
+    width: 100%;
+    padding: 14px;
+    background: var(--accent);
+    color: #fff;
+    font-size: 15px;
+    font-weight: 600;
+    letter-spacing: .1px;
+    border: none;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: background .15s, transform .1s, box-shadow .15s;
+    box-shadow: 0 4px 16px rgba(79,142,247,.3);
+    text-align: center;
+    text-decoration: none;
+  }
+
+  .btn:hover {
+    background: var(--accent-h);
+    box-shadow: 0 6px 20px rgba(79,142,247,.4);
+  }
+
+  .btn:active {
+    transform: scale(.98);
+  }
+
+  /* loading state */
+  .btn.loading {
+    pointer-events: none;
+    opacity: .8;
+  }
+
+  .btn.loading::after {
+    content: "";
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    border: 2px solid rgba(255,255,255,.4);
+    border-top-color: #fff;
+    border-radius: 50%;
+    animation: spin .7s linear infinite;
+    margin-left: 8px;
+    vertical-align: middle;
+  }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .terms {
+    margin-top: 18px;
+    font-size: 12px;
+    color: var(--text-3);
+    text-align: center;
+    line-height: 1.6;
+  }
+
+  .terms a {
+    color: var(--text-2);
+    text-decoration: none;
+    border-bottom: 1px solid var(--border);
+    transition: color .15s;
+  }
+
+  .terms a:hover { color: var(--text-1); }
+
+  /* bottom signature */
+  .signature {
+    position: fixed;
+    bottom: 18px;
+    right: 22px;
+    font-size: 11px;
+    color: var(--text-3);
+    letter-spacing: .4px;
+    z-index: 2;
+    user-select: none;
+    font-style: italic;
+  }
+
+  /* success state */
+  .success-overlay {
+    display: none;
+    position: absolute;
+    inset: 0;
+    background: var(--surface);
+    border-radius: var(--radius);
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    gap: 16px;
+    z-index: 10;
+  }
+
+  .success-overlay.show {
+    display: flex;
+  }
+
+  .check-circle {
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    background: rgba(79,142,247,.12);
+    border: 1.5px solid var(--accent);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .success-title {
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--text-1);
+  }
+
+  .success-sub {
+    font-size: 13px;
+    color: var(--text-2);
+  }
+
+  @media (max-width: 440px) {
+    .card { padding: 32px 24px 28px; }
+    h1 { font-size: 20px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="card">
+
+  <!-- success overlay -->
+  <div class="success-overlay" id="success">
+    <div class="check-circle">
+      <svg width="24" height="24" fill="none" stroke="#4f8ef7"
+           stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="20 6 9 17 4 12"/>
+      </svg>
+    </div>
+    <div class="success-title">Connected</div>
+    <div class="success-sub">You now have internet access</div>
+  </div>
+
+  <!-- logo -->
+  <div class="logo">
+    <svg class="logo-icon" viewBox="0 0 36 36" fill="none">
+      <rect width="36" height="36" rx="9" fill="#4f8ef7" opacity=".12"/>
+      <path d="M18 7L10 13v7c0 4.4 3.4 8.5 8 9.5 4.6-1 8-5.1 8-9.5v-7L18 7z"
+            fill="none" stroke="#4f8ef7" stroke-width="1.8"
+            stroke-linejoin="round"/>
+      <path d="M14 18.5l2.5 2.5 5.5-5.5"
+            stroke="#4f8ef7" stroke-width="1.8"
+            stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+    <span class="logo-text">Hawk<span>Gate</span></span>
+  </div>
+
+  <div class="divider"></div>
+
+  <h1>Get connected</h1>
+  <p class="subtitle">
+    You're one tap away from internet access.<br>
+    By connecting you agree to our acceptable use policy.
+  </p>
+
+  <div class="info-grid">
+    <div class="info-row">
+      <span class="info-dot"></span>
+      <span>Secure network access via HawkGate</span>
+    </div>
+    <div class="info-row">
+      <span class="info-dot"></span>
+      <span>Session monitored for fair use</span>
+    </div>
+    <div class="info-row">
+      <span class="info-dot"></span>
+      <span>Disconnect anytime</span>
+    </div>
+  </div>
+
+  <form method="POST" action="/login" id="form">
+    <button type="submit" class="btn" id="btn">
+      Connect to internet
+    </button>
+  </form>
+
+  <p class="terms">
+    Having trouble? <a href="/portal">Reload page</a>
+  </p>
+
+</div>
+
+<div class="signature">belong to infinity</div>
+
+<script>
+document.getElementById('form').addEventListener('submit', function(e) {
+  var btn = document.getElementById('btn');
+  btn.textContent = 'Connecting';
+  btn.classList.add('loading');
+});
+</script>
+
+</body>
+</html>

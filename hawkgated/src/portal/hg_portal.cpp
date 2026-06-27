@@ -1,7 +1,14 @@
 #include "hg_portal.h"
 #include "../util/hg_config.h"
+#include "../util/hg_log.h"
+#include <fstream>
 
 static HgBpfCtrl *g_bpf = nullptr;
+
+/* ── embedded portal pages ─────────────────────────────────────────────────── */
+static const char *LOGIN_PAGE = "/etc/hawkgate/static/login.html";
+
+static const char *SUCCESS_PAGE = "/etc/hawkgate/static/success.html";
 
 static const OsProbe g_probes[] = {
     {"connectivitycheck.gstatic.com", "/generate_204",
@@ -22,6 +29,18 @@ static const OsProbe g_probes[] = {
 void init_portal(HgBpfCtrl *b)
 {
   g_bpf = b;
+}
+
+static std::string read_html_file(const char *path)
+{
+  std::ifstream f(path);
+  if (!f.is_open())
+  {
+    log_warning("portal: cannot open HTML file");
+    return "<html><body><h2>Portal unavailable</h2></body></html>";
+  }
+  return std::string(std::istreambuf_iterator<char>(f),
+                     std::istreambuf_iterator<char>());
 }
 
 std::string handle_portal(const HttpRequest &req, const std::string &client_ip)
@@ -62,16 +81,29 @@ std::string handle_portal(const HttpRequest &req, const std::string &client_ip)
 
   if (host_name == g_config.gateway_fqdn)
   {
-    std::string form_body = "<html><body><h1>HawkGate Login</h1>"
-                            "<form method=\"POST\" action=\"/login\">"
-                            "Username: <input type=\"text\" name=\"username\"><br>"
-                            "Password: <input type=\"password\" name=\"password\"><br>"
-                            "<input type=\"submit\" value=\"Login\">"
-                            "</form></body></html>";
-    return "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nContent-Length: "
-           + std::to_string(form_body.size()) + "\r\n\r\n" + form_body;
+    std::string body = read_html_file(LOGIN_PAGE);
+    return "HTTP/1.1 200 OK\r\n"
+           "Content-Type: text/html\r\n"
+           "Content-Length: " +
+           std::to_string(body.size()) + "\r\n\r\n" + body;
   }
-  std::string loc = "http://" + g_config.gateway_fqdn + ":"
-                + std::to_string(g_config.http_port) + "/portal";
+  std::string loc = "http://" + g_config.gateway_fqdn + ":" + std::to_string(g_config.http_port) + "/portal";
   return "HTTP/1.1 302 Found\r\nLocation: " + loc + "\r\nContent-Length: 0\r\n\r\n";
+}
+
+std::string handle_success(const HttpRequest &req, const std::string &client_ip)
+{
+  (void)req;
+  (void)client_ip;
+  std::string body = read_html_file(SUCCESS_PAGE);
+  /* inject redirect URL */
+  std::string placeholder = "http://example.com";
+  size_t pos = body.find(placeholder);
+  if (pos != std::string::npos)
+    body.replace(pos, placeholder.size(),
+                 "http://" + g_config.gateway_fqdn);
+  return "HTTP/1.1 200 OK\r\n"
+         "Content-Type: text/html\r\n"
+         "Content-Length: " +
+         std::to_string(body.size()) + "\r\n\r\n" + body;
 }

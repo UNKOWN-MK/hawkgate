@@ -293,7 +293,7 @@ cat > "$ROOT_MAKEFILE" <<MAKE
 # Regenerate with:  ./configure.sh
 # ─────────────────────────────────────────────────────────────────────────────
 
-.PHONY: all kernel hawkgated clean rebuild
+.PHONY: all kernel hawkgated clean rebuild install uninstall
 
 all: kernel hawkgated
 
@@ -311,16 +311,36 @@ rebuild:
 clean:
 	\$(MAKE) -C kernel clean
 	\$(MAKE) -C hawkgated clean
-MAKE
-ok "Makefile  ${C_DIM}($ROOT_MAKEFILE)${C_RESET}"
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Done
-# ─────────────────────────────────────────────────────────────────────────────
-printf "\n${C_BOLD}${C_GREEN}  ✔  Configuration complete${C_RESET}\n\n"
-printf "  ${C_BOLD}Next steps:${C_RESET}\n"
-printf "    ${C_CYAN}make${C_RESET}               build everything\n"
-printf "    ${C_CYAN}make kernel${C_RESET}        kernel module + hgctl only\n"
-printf "    ${C_CYAN}make hawkgated${C_RESET}     daemon only\n"
-printf "    ${C_CYAN}make rebuild${C_RESET}       clean build from scratch\n"
-printf "    ${C_CYAN}sudo kernel/build/hgctl start -i br0${C_RESET}\n\n"
+install: all
+	install -d /usr/local/bin
+	install -d /etc/hawkgate
+	install -d /etc/systemd/system
+	install -m 755 kernel/build/hgctl           /usr/local/bin/hgctl
+	install -m 755 hawkgated/build/hawkgated    /usr/local/bin/hawkgated
+	install -m 644 hawkgated/src/portal/static/login.html   /etc/hawkgate/login.html
+	install -m 644 hawkgated/src/portal/static/success.html /etc/hawkgate/success.html
+	@if [ ! -f /etc/hawkgate/hawkgate.conf ]; then \\
+	    install -m 644 docs/hawkgate.conf.example /etc/hawkgate/hawkgate.conf; \\
+	    echo "  installed default config → /etc/hawkgate/hawkgate.conf"; \\
+	else \\
+	    echo "  skipped config (already exists) → /etc/hawkgate/hawkgate.conf"; \\
+	fi
+	install -m 644 docs/hawkgated.service /etc/systemd/system/hawkgated.service
+	systemctl daemon-reload
+	@echo ""
+	@echo "  HawkGate installed. Next steps:"
+	@echo "    1. Edit /etc/hawkgate/hawkgate.conf"
+	@echo "    2. systemctl enable --now hawkgated"
+	@echo ""
+
+uninstall:
+	systemctl stop hawkgated 2>/dev/null || true
+	systemctl disable hawkgated 2>/dev/null || true
+	rm -f /usr/local/bin/hgctl
+	rm -f /usr/local/bin/hawkgated
+	rm -f /etc/systemd/system/hawkgated.service
+	systemctl daemon-reload
+	@echo "  Binaries and service removed."
+	@echo "  Config and portal pages kept at /etc/hawkgate/ — remove manually if needed."
+MAKE
