@@ -318,15 +318,15 @@ install: all
 	install -d /etc/systemd/system
 	install -m 755 kernel/build/hgctl           /usr/local/bin/hgctl
 	install -m 755 hawkgated/build/hawkgated    /usr/local/bin/hawkgated
-	install -m 644 hawkgated/src/portal/static/login.html   /etc/hawkgate/login.html
-	install -m 644 hawkgated/src/portal/static/success.html /etc/hawkgate/success.html
+	install -m 644 hawkgated/etc/hawkgate/static/login.html   /etc/hawkgate/login.html
+	install -m 644 hawkgated/etc/hawkgate/static/success.html /etc/hawkgate/success.html
 	@if [ ! -f /etc/hawkgate/hawkgate.conf ]; then \\
-	    install -m 644 docs/hawkgate.conf.example /etc/hawkgate/hawkgate.conf; \\
+	    install -m 644 hawkgated/etc/hawkgate/hawkgate.conf.example /etc/hawkgate/hawkgate.conf; \\
 	    echo "  installed default config → /etc/hawkgate/hawkgate.conf"; \\
 	else \\
 	    echo "  skipped config (already exists) → /etc/hawkgate/hawkgate.conf"; \\
 	fi
-	install -m 644 docs/hawkgated.service /etc/systemd/system/hawkgated.service
+	install -m 644 hawkgated/etc/hawkgate/hawkgated.service /etc/systemd/system/hawkgated.service
 	systemctl daemon-reload
 	@echo ""
 	@echo "  HawkGate installed. Next steps:"

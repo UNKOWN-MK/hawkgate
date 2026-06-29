@@ -3,6 +3,7 @@
 
 #include <string>
 #include <cstdint>
+#include <vector>
 
 enum class PortalMode { BUILTIN, EXTERNAL_URL };
 
@@ -18,6 +19,9 @@ typedef struct config
     uint32_t d_rate;
     uint64_t quota;
     PortalMode portal_mode = PortalMode::BUILTIN;
+    std::vector<std::string> preauth_l2;
+    std::vector<std::string> preauth_l3;
+    std::vector<std::string> preauth_l4;
 }HgConfig;
 
 extern HgConfig g_config;

@@ -77,6 +77,135 @@ bool HgBpfCtrl::poll_one(const std::string &ip, HgClientStats &out)
   return true;
 }
 
+static std::string translate_l2(const std::string &name)
+{
+  if (name == "arp")
+    return "0x0806";
+  if (name == "ipv4")
+    return "0x0800";
+  if (name == "ipv6")
+    return "0x86DD";
+  if (name == "vlan")
+    return "0x8100";
+  if (name == "pppoe")
+    return "0x8864";
+  log_warning(("hg_bpf_ctrl: unknown preauth l2 protocol '" + name + "' — supported: arp,ipv4,ipv6,vlan,pppoe").c_str());
+  return "";
+}
+
+static std::string translate_l3(const std::string &name)
+{
+  if (name == "icmp")
+    return "1";
+  if (name == "igmp")
+    return "2";
+  if (name == "tcp")
+    return "6";
+  if (name == "udp")
+    return "17";
+  if (name == "gre")
+    return "47";
+  if (name == "esp")
+    return "50";
+  if (name == "ah")
+    return "51";
+  if (name == "icmpv6")
+    return "58";
+  if (name == "ospf")
+    return "89";
+  if (name == "sctp")
+    return "132";
+  log_warning(("hg_bpf_ctrl: unknown preauth l3 protocol '" + name + "' — supported: icmp,igmp,tcp,udp,gre,esp,ah,icmpv6,ospf,sctp").c_str());
+  return "";
+}
+
+static std::vector<std::string> translate_l4(const std::string &name)
+{
+  if (name == "dns")
+    return {"17:any:53", "17:53:any"};
+  if (name == "dhcp")
+    return {"17:68:67", "17:67:68"};
+  if (name == "ntp")
+    return {"17:any:123", "17:123:any"};
+  if (name == "http")
+    return {"6:any:80", "6:80:any"};
+  if (name == "https")
+    return {"6:any:443", "6:443:any"};
+  if (name == "mdns")
+    return {"17:any:5353", "17:5353:any"};
+  if (name == "llmnr")
+    return {"17:any:5355", "17:5355:any"};
+  if (name == "syslog")
+    return {"17:any:514", "17:514:any"};
+  if (name == "snmp")
+    return {"17:any:161", "17:161:any"};
+  log_warning(("hg_bpf_ctrl: unknown preauth l4 protocol '" + name + "' — supported: dns,dhcp,ntp,http,https,mdns,llmnr,syslog,snmp").c_str());
+  return {};
+}
+
+static void apply_preauth_l2()
+{
+  for (const auto &name : g_config.preauth_l2)
+  {
+    std::string val = translate_l2(name);
+    if (val.empty())
+      continue;
+    std::string flag = "--l2";
+    const char *av[] = {
+        "hgctl", "proto", "-a", "add",
+        "-i", g_config.iface_name.c_str(),
+        flag.c_str(), val.c_str(),
+        nullptr};
+    if (!exec_cmd(av))
+      log_warning(("hg_bpf_ctrl: failed to add preauth l2: " + name).c_str());
+    else
+      log_info(("hg_bpf_ctrl: preauth l2 added: " + name).c_str());
+  }
+}
+
+static void apply_preauth_l3()
+{
+  for (const auto &name : g_config.preauth_l3)
+  {
+    std::string val = translate_l3(name);
+    if (val.empty())
+      continue;
+    std::string flag = "--l3";
+    const char *av[] = {
+        "hgctl", "proto", "-a", "add",
+        "-i", g_config.iface_name.c_str(),
+        flag.c_str(), val.c_str(),
+        nullptr};
+    if (!exec_cmd(av))
+      log_warning(("hg_bpf_ctrl: failed to add preauth l3: " + name).c_str());
+    else
+      log_info(("hg_bpf_ctrl: preauth l3 added: " + name).c_str());
+  }
+}
+
+static void apply_preauth_l4()
+{
+  std::string flag = "--l4";
+  for (const auto &name : g_config.preauth_l4)
+  {
+    auto rules = translate_l4(name);
+    if (rules.empty())
+      continue;
+    for (const auto &rule : rules)
+    {
+      std::string r = rule;
+      const char *av[] = {
+          "hgctl", "proto", "-a", "add",
+          "-i", g_config.iface_name.c_str(),
+          flag.c_str(), r.c_str(),
+          nullptr};
+      if (!exec_cmd(av))
+        log_warning(("hg_bpf_ctrl: failed to add preauth l4: " + name).c_str());
+    }
+    log_info(("hg_bpf_ctrl: preauth l4 added: " + name + " (both directions)").c_str());
+  }
+}
+
 bool HgBpfCtrl::start_hgctl()
 {
   std::string port_str = std::to_string(g_config.http_port);
@@ -86,7 +215,15 @@ bool HgBpfCtrl::start_hgctl()
       "-P", g_config.portal_ip.c_str(),
       "-p", port_str.c_str(),
       nullptr};
-  return exec_cmd(argv);
+  if (!exec_cmd(argv))
+  {
+    log_error("Failed to start hgctl");
+    return false;
+  }
+  apply_preauth_l2();
+  apply_preauth_l3();
+  apply_preauth_l4();
+  return true;
 }
 
 bool HgBpfCtrl::stop_hgctl()
@@ -144,7 +281,6 @@ bool HgBpfCtrl::map_ele_del(const std::string &map_name, const std::string &key)
       "hgctl", "map-del",
       "--map", map_name.c_str(),
       "--key", key.c_str(),
-      nullptr
-  };
+      nullptr};
   return exec_cmd(argv);
 }
