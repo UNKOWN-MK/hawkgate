@@ -135,7 +135,8 @@ static void fill_stats(uint32_t ip_key,
         s->state = EXPIRE;
 
     s->rate_id = cs->rate_limit_id;
-    s->rate_kbps = rate ? BPS_TO_KBIT(rate->rate_Bps) : 0;
+    s->rate_kbps_dw = rate ? BPS_TO_KBIT(rate->rate_Bps_d) : 0;
+    s->rate_kbps_up = rate ? BPS_TO_KBIT(rate->rate_Bps_u) : 0;
     s->horizon_ms = rate ? (rate->horizon_ns / 1000000ULL) : 0;
 
     resolve_times(cs, agg->last_seen, s);

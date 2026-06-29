@@ -37,7 +37,8 @@ struct hg_client_stats
     /* session metadata */
     int state;           /* enum client_status value                      */
     uint32_t rate_id;    /* key into hg_rates map                         */
-    uint64_t rate_kbps;  /* resolved download rate in kbit/s (0=unlimited)*/
+    uint64_t rate_kbps_dw;  /* resolved download rate in kbit/s (0=unlimited)*/
+    uint64_t rate_kbps_up;  /* resolved upload rate in kbit/s (0=unlimited)   */
     uint64_t horizon_ms; /* EDT burst depth in ms                         */
 
     /* timestamps — all as wall-clock time_t for easy formatting */

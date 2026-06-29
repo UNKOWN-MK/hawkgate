@@ -81,7 +81,8 @@ struct hg_counter
 /* ─── Rate profile (hg_rates map) ─────────────────────────────────────────── */
 struct hg_rate_cfg
 {
-  __u64 rate_Bps;   /* allowed rate in bytes/second    */
+  __u64 rate_Bps_d;   /* allowed rate in bytes/second download    */
+  __u64 rate_Bps_u;   /* allowed rate in bytes/second upload      */
   __u64 horizon_ns; /* max burst depth in nanoseconds  */
 };
 

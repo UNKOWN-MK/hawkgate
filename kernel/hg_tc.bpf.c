@@ -96,18 +96,21 @@ static __always_inline int apply_edt_shaping(struct __sk_buff *skb,
 {
   __u32 r_id = cs->rate_limit_id;
 
-  struct hg_rate_cfg *cfg = bpf_map_lookup_elem(&HG_RATE_MAP, &r_id);
-  if (!cfg || cfg->rate_Bps == 0)
+    struct hg_rate_cfg *cfg = bpf_map_lookup_elem(&HG_RATE_MAP, &r_id);
+  if (!cfg)
+    return TC_ACT_OK;
+
+  __u64 rate = is_upload ? cfg->rate_Bps_u : cfg->rate_Bps_d;
+  if (rate == 0)
     return TC_ACT_OK;
 
   __u64 now = bpf_ktime_get_ns();
-  __u64 delay = ((__u64)skb->len * NSEC_PER_SEC) / cfg->rate_Bps;
-  __u64 next_tstamp;
+  __u64 delay = ((__u64)skb->len * NSEC_PER_SEC) / rate;
 
   bpf_spin_lock(&cs->lock);
 
   __u64 last_ts = is_upload ? cs->last_u_tstamp : cs->last_d_tstamp;
-  next_tstamp = (now > last_ts) ? now + delay : last_ts + delay;
+  __u64 next_tstamp  = (now > last_ts) ? now + delay : last_ts + delay;
 
   if (is_upload && (next_tstamp - now) > cfg->horizon_ns)
   {

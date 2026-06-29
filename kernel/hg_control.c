@@ -361,7 +361,6 @@ int add_action(const char *iface, const char *ip,
 {
     /* suppress unused-parameter warnings for args reserved for future use */
     (void)iface;
-    (void)u_limit;
 
     struct hg_client client_val = {0};
     struct hg_rate_cfg rate_val = {0};
@@ -369,12 +368,13 @@ int add_action(const char *iface, const char *ip,
     int client_fd, counter_fd, rate_fd;
 
     /* build rate profile */
-    rate_val.rate_Bps = KBIT_TO_BPS(d_limit);
+    rate_val.rate_Bps_d = KBIT_TO_BPS(d_limit);
+    rate_val.rate_Bps_u = KBIT_TO_BPS(u_limit);
     rate_val.horizon_ns = HG_HORIZON_NS;
 
     printf("hgctl: rate_id=%u  rate=%llu kbps  horizon=%llu ms\n",
            rate_id,
-           BPS_TO_KBIT(rate_val.rate_Bps),
+           BPS_TO_KBIT(rate_val.rate_Bps_d),
            rate_val.horizon_ns / 1000000ULL);
 
     /* build client entry */
@@ -643,7 +643,7 @@ int details_one_action(const char *iface, const char *ip)
     printf("  %-16s %s  (%lds ago)\n", "Auth time", auth_buf, s.session_sec);
     printf("  %-16s %s  (%s)\n", "Expires", expiry_buf, ttl_buf);
     printf("  %-16s id=%-4u  %lu kbps  horizon=%lums\n",
-           "Rate policy", s.rate_id, s.rate_kbps, s.horizon_ms);
+           "Rate policy", s.rate_id, s.rate_kbps_dw, s.horizon_ms);
     printf("\n");
     printf("  %-16s %s   in %lu packets\n", "Upload", up_b, s.up_packets);
     printf("  %-16s %s   in %lu packets\n", "Download", dn_b, s.dn_packets);
