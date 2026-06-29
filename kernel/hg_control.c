@@ -571,6 +571,7 @@ int show_action(const char *iface)
            count);
 
     hg_stats_free(clients);
+    show_protocols();
     return SUCCESS;
 }
 
@@ -650,7 +651,6 @@ int details_one_action(const char *iface, const char *ip)
     printf("  %-16s %s  (%lds ago)\n", "Last seen", seen_buf, s.age_sec);
     printf("\n");
 
-    show_protocols();
     return SUCCESS;
 }
 
