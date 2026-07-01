@@ -38,7 +38,9 @@ typedef enum {
     SHOW     = 5,
     DETAILS  = 6,
     PROTOCOL = 7,
-    MAP_DEL  = 8
+    MAP_DEL  = 8,
+    BYPASS_ADD = 11,
+    BYPASS_DEL = 12
 } action_opcode;
 
 /* ─── Pre-auth protocol rule (userspace only) ──────────────────────────────── */
@@ -67,6 +69,8 @@ int parse_proto(int argc, char **argv, const char *prog);
 int parse_show(int argc, char **argv, const char *prog);
 int parse_details(int argc, char **argv, const char *prog);
 int parse_map_del(int argc, char **argv, const char *prog);
+int parse_bypass_add(int argc, char **argv, const char *prog);
+int parse_bypass_del(int argc, char **argv, const char *prog);
 
 
 /* ─── Help print functions (hg_cli.c) ─────────────────────────────────────── */
@@ -79,14 +83,16 @@ void print_show_help(const char *prog);
 void print_details_help(const char *prog);
 void print_proto_help(const char *prog);
 void print_map_del_help(const char *prog);
+void print_bypass_help(const char *prog);
+
 
 /* ─── Action functions (hg_control.c) ─────────────────────────────────────── */
 int start_action(const char *iface, const char *portal_ip, __u16 portal_port);
 int  stop_action(const char *iface);
-int  add_action(const char *iface, const char *ip,
-                time_t expire, time_t idle,
-                __u64 d_limit, __u64 u_limit, __u32 rate_id);
-int  del_action(const char *iface, const char *ip);
+int add_action(const char *iface, const char *mac, const char *ip,
+               time_t expire, time_t idle,
+               __u64 d_limit, __u64 u_limit, __u32 rate_id);
+int  del_action(const char *iface, const char *mac);
 int  show_action(const char *iface);
 int  details_action(const char *iface);
 int  details_one_action(const char *iface, const char *ip);
@@ -95,5 +101,8 @@ int  protocol_allow_del_action(struct proto_rule *rule);
 bool hg_get_rate_cfg(__u32 rate_id, struct hg_rate_cfg *out);
 int map_del_action(const char *map_name, const char *key_spec);
 void show_protocols(void);
+int bypass_del_action(const char *ip);
+int bypass_add_action(const char *ip);
+int  resolve_ip_to_mac(const char *ip, char *mac_out, size_t mac_len);
 
 #endif /* HG_USER_H */

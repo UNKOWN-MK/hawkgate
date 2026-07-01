@@ -32,6 +32,10 @@
 #define HG_IFB_IDX_MAP hg_ifb_idx
 #define HG_PORTAL_CFG_MAP hg_portal_cfg
 #define HG_CONNTRACK_MAP hg_conntrack
+#define HG_MAC_IP_MAP      hg_mac_ip    /* MAC → current IP binding   */
+#define HG_IP_MAC_MAP      hg_ip_mac    /* IP  → MAC reverse lookup   */
+#define HG_BYPASS_MAP      hg_bypass    /* static IP trust bypass      */
+
 
 /* ─── BPF pin directory ────────────────────────────────────────────────────────
  * All maps live under /sys/fs/bpf/hg/ — one subdir, easy to list and wipe.
@@ -86,7 +90,16 @@ struct hg_rate_cfg
   __u64 horizon_ns; /* max burst depth in nanoseconds  */
 };
 
-/* ─── Per-client auth + EDT state (hg_clients map) ────────────────────────── */
+/* ─── MAC address key (hg_clients map, hg_mac_ip map) ─────────────────────── */
+struct hg_mac_key
+{
+  __u8  mac[6];
+  __u16 pad;   /* MUST be zero — BPF map key comparison is byte-exact */
+};
+
+
+/* ─── Per-client auth + EDT state (hg_clients map) ────────────────────────── *
+ * Key: struct hg_mac_key (MAC address). Changed from __u32 (IPv4).            */
 struct hg_client
 {
   struct bpf_spin_lock lock; /* MUST be first — BPF verifier requirement  */

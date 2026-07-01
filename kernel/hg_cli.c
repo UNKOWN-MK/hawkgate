@@ -12,38 +12,38 @@ static struct option start_opts[] = {
 
 int parse_start(int argc, char **argv, const char *prog)
 {
-    char iface[16] = {0};
-    char portal_ip[16] = {0};
-    __u16 portal_port = 0;
-    int c;
+  char iface[16] = {0};
+  char portal_ip[16] = {0};
+  __u16 portal_port = 0;
+  int c;
 
-    while ((c = getopt_long(argc, argv, "i:P:p:", start_opts, NULL)) != -1)
+  while ((c = getopt_long(argc, argv, "i:P:p:", start_opts, NULL)) != -1)
+  {
+    switch (c)
     {
-        switch (c)
-        {
-        case 'i':
-            strncpy(iface, optarg, sizeof(iface) - 1);
-            break;
-        case 'P':
-            strncpy(portal_ip, optarg, sizeof(portal_ip) - 1);
-            break;
-        case 'p':
-            portal_port = atoi(optarg);
-            break;
-        default:
-            printf("Unknown option\n");
-            print_start_help(prog);
-            return FAILED;
-        }
+    case 'i':
+      strncpy(iface, optarg, sizeof(iface) - 1);
+      break;
+    case 'P':
+      strncpy(portal_ip, optarg, sizeof(portal_ip) - 1);
+      break;
+    case 'p':
+      portal_port = atoi(optarg);
+      break;
+    default:
+      printf("Unknown option\n");
+      print_start_help(prog);
+      return FAILED;
     }
+  }
 
-    if (!iface[0] || !portal_ip[0] || !portal_port)
-    {
-        print_start_help(prog);
-        return FAILED;
-    }
+  if (!iface[0] || !portal_ip[0] || !portal_port)
+  {
+    print_start_help(prog);
+    return FAILED;
+  }
 
-    return start_action(iface, portal_ip, portal_port);
+  return start_action(iface, portal_ip, portal_port);
 }
 
 static struct option iface_opts[] = {
@@ -52,29 +52,29 @@ static struct option iface_opts[] = {
 
 int parse_stop(int argc, char **argv, const char *prog)
 {
-    char iface[16] = {0};
-    int c;
+  char iface[16] = {0};
+  int c;
 
-    while ((c = getopt_long(argc, argv, "i:", iface_opts, NULL)) != -1)
+  while ((c = getopt_long(argc, argv, "i:", iface_opts, NULL)) != -1)
+  {
+    switch (c)
     {
-        switch (c)
-        {
-        case 'i':
-            strncpy(iface, optarg, sizeof(iface) - 1);
-            break;
-        default:
-            print_stop_help(prog);
-            return FAILED;
-        }
+    case 'i':
+      strncpy(iface, optarg, sizeof(iface) - 1);
+      break;
+    default:
+      print_stop_help(prog);
+      return FAILED;
     }
+  }
 
-    if (!iface[0])
-    {
-        print_stop_help(prog);
-        return FAILED;
-    }
+  if (!iface[0])
+  {
+    print_stop_help(prog);
+    return FAILED;
+  }
 
-    return stop_action(iface);
+  return stop_action(iface);
 }
 
 /*******************************************************************************************
@@ -82,6 +82,7 @@ int parse_stop(int argc, char **argv, const char *prog)
 *******************************************************************************************/
 static struct option add_opts[] = {
     {"iface", required_argument, 0, 'i'},
+    {"mac", required_argument, 0, 'm'},
     {"client", required_argument, 0, 'c'},
     {"expire", required_argument, 0, 'e'},
     {"idle", required_argument, 0, 'w'},
@@ -91,63 +92,80 @@ static struct option add_opts[] = {
 
 int parse_add(int argc, char **argv, const char *prog)
 {
-    char iface[16] = {0};
-    char ip[16] = {0};
-    time_t expire = 0;
-    time_t idle = 0;
-    __u64 D_limit = 0;
-    __u64 U_limit = 0;
-    __u32 rate_id = RATE_ID_NO_LIMIT;
+  char iface[16] = {0};
+  char mac[18] = {0};
+  char ip[16] = {0};
+  time_t expire = 0;
+  time_t idle = 0;
+  __u64 D_limit = 0;
+  __u64 U_limit = 0;
+  __u32 rate_id = RATE_ID_NO_LIMIT;
+  int c;
 
-    int c;
-    while ((c = getopt_long(argc, argv, "i:c:e:w:D:U:", add_opts, NULL)) != -1)
+  while ((c = getopt_long(argc, argv, "i:m:c:e:w:D:U:", add_opts, NULL)) != -1)
+  {
+    switch (c)
     {
-        switch (c)
-        {
-        case 'i':
-            strncpy(iface, optarg, sizeof(iface) - 1);
-            break;
-        case 'c':
-            strncpy(ip, optarg, sizeof(ip) - 1);
-            break;
-        case 'e':
-            expire = atoll(optarg);
-            break;
-        case 'w':
-            idle = atoll(optarg);
-            break;
-        case 'D':
-            D_limit = atoll(optarg);
-            break;
-        case 'U':
-            U_limit = atoll(optarg);
-            break;
-        default:
-            print_add_help(prog);
-            return FAILED;
-        }
+    case 'i':
+      strncpy(iface, optarg, sizeof(iface) - 1);
+      break;
+    case 'm':
+      strncpy(mac, optarg, sizeof(mac) - 1);
+      break;
+    case 'c':
+      strncpy(ip, optarg, sizeof(ip) - 1);
+      break;
+    case 'e':
+      expire = atoll(optarg);
+      break;
+    case 'w':
+      idle = atoll(optarg);
+      break;
+    case 'D':
+      D_limit = atoll(optarg);
+      break;
+    case 'U':
+      U_limit = atoll(optarg);
+      break;
+    default:
+      print_add_help(prog);
+      return FAILED;
     }
+  }
 
-    if (!iface[0] || !ip[0])
-    {
-        print_add_help(prog);
-        return FAILED;
-    }
+  if (!iface[0] || (!mac[0] && !ip[0]))
+  {
+    print_add_help(prog);
+    return FAILED;
+  }
 
-    if (D_limit && U_limit)
+  if (D_limit && U_limit)
+  {
+    if (ip[0])
     {
-        char *ip_last = strdup(ip);
-        char *last_dot = strrchr(ip_last, '.');
-        rate_id = atoi(last_dot != NULL ? last_dot + 1 : "0");
-        printf("hgctl: rate_limit_id = %u\n", rate_id);
-        free(ip_last);
+      char *ip_last = strdup(ip);
+      char *last_dot = strrchr(ip_last, '.');
+      rate_id = (__u32)atoi(last_dot != NULL ? last_dot + 1 : "0");
+      free(ip_last);
     }
     else
     {
-        rate_id = RATE_ID_NO_LIMIT;
+      /* MAC-only path: use last byte of MAC as rate key */
+      unsigned int last_byte = 0;
+      char *last_colon = strrchr(mac, ':');
+      if (last_colon)
+        sscanf(last_colon + 1, "%x", &last_byte);
+      rate_id = (__u32)last_byte;
     }
+    printf("hgctl: rate_limit_id = %u\n", rate_id);
+  }
+  else
+  {
+    rate_id = RATE_ID_NO_LIMIT;
+  }
 
-    return add_action(iface, ip, expire, idle, D_limit, U_limit, rate_id);
+  return add_action(iface, mac[0] ? mac : NULL, ip[0] ? ip : NULL,
+                    expire, idle, D_limit, U_limit, rate_id);
 }
 
 /*******************************************************************************************
@@ -155,38 +173,54 @@ int parse_add(int argc, char **argv, const char *prog)
 *******************************************************************************************/
 static struct option del_opts[] = {
     {"iface", required_argument, 0, 'i'},
+    {"mac", required_argument, 0, 'm'},
     {"client", required_argument, 0, 'c'},
     {0, 0, 0, 0}};
 
 int parse_del(int argc, char **argv, const char *prog)
 {
-    char iface[16] = {0};
-    char ip[16] = {0};
-    int c;
+  char iface[16] = {0};
+  char mac[18] = {0};
+  char ip[16] = {0};
+  int c;
 
-    while ((c = getopt_long(argc, argv, "i:c:", del_opts, NULL)) != -1)
+  while ((c = getopt_long(argc, argv, "i:m:c:", del_opts, NULL)) != -1)
+  {
+    switch (c)
     {
-        switch (c)
-        {
-        case 'i':
-            strncpy(iface, optarg, sizeof(iface) - 1);
-            break;
-        case 'c':
-            strncpy(ip, optarg, sizeof(ip) - 1);
-            break;
-        default:
-            print_del_help(prog);
-            return FAILED;
-        }
+    case 'i':
+      strncpy(iface, optarg, sizeof(iface) - 1);
+      break;
+    case 'm':
+      strncpy(mac, optarg, sizeof(mac) - 1);
+      break;
+    case 'c':
+      strncpy(ip, optarg, sizeof(ip) - 1);
+      break;
+    default:
+      print_del_help(prog);
+      return FAILED;
     }
+  }
 
-    if (!iface[0] || !ip[0])
+  if (!iface[0] || (!mac[0] && !ip[0]))
+  {
+    print_del_help(prog);
+    return FAILED;
+  }
+
+  if (!mac[0])
+  {
+    if (resolve_ip_to_mac(ip, mac, sizeof(mac)) != SUCCESS)
     {
-        print_del_help(prog);
-        return FAILED;
+      fprintf(stderr, "hgctl: del: no binding found for IP %s\n"
+                      "       client must have sent at least one packet first\n",
+              ip);
+      return FAILED;
     }
+  }
 
-    return del_action(iface, ip);
+  return del_action(iface, mac);
 }
 
 /*******************************************************************************************
@@ -194,67 +228,69 @@ int parse_del(int argc, char **argv, const char *prog)
 *******************************************************************************************/
 int parse_show(int argc, char **argv, const char *prog)
 {
-    char iface[16] = {0};
-    int c;
+  char iface[16] = {0};
+  int c;
 
-    while ((c = getopt_long(argc, argv, "i:", iface_opts, NULL)) != -1)
+  while ((c = getopt_long(argc, argv, "i:", iface_opts, NULL)) != -1)
+  {
+    switch (c)
     {
-        switch (c)
-        {
-        case 'i':
-            strncpy(iface, optarg, sizeof(iface) - 1);
-            break;
-        default:
-            print_show_help(prog);
-            return FAILED;
-        }
+    case 'i':
+      strncpy(iface, optarg, sizeof(iface) - 1);
+      break;
+    default:
+      print_show_help(prog);
+      return FAILED;
     }
+  }
 
-    if (!iface[0])
-    {
-        print_show_help(prog);
-        return FAILED;
-    }
+  if (!iface[0])
+  {
+    print_show_help(prog);
+    return FAILED;
+  }
 
-    show_action(iface);
-    return SUCCESS;
+  show_action(iface);
+  return SUCCESS;
 }
 
 static struct option details_opts[] = {
-    {"iface",  required_argument, 0, 'i'},
+    {"iface", required_argument, 0, 'i'},
     {"client", required_argument, 0, 'c'},
-    {0, 0, 0, 0}
-};
- 
+    {0, 0, 0, 0}};
+
 int parse_details(int argc, char **argv, const char *prog)
 {
-    char iface[16] = {0};
-    char ip[16]    = {0};
-    int c;
- 
-    while ((c = getopt_long(argc, argv, "i:c:", details_opts, NULL)) != -1) {
-        switch (c) {
-        case 'i':
-            strncpy(iface, optarg, sizeof(iface)-1);
-            break;
-        case 'c':
-            strncpy(ip, optarg, sizeof(ip)-1);
-            break;
-        default:
-            print_details_help(prog);
-            return FAILED;
-        }
+  char iface[16] = {0};
+  char ip[16] = {0};
+  int c;
+
+  while ((c = getopt_long(argc, argv, "i:c:", details_opts, NULL)) != -1)
+  {
+    switch (c)
+    {
+    case 'i':
+      strncpy(iface, optarg, sizeof(iface) - 1);
+      break;
+    case 'c':
+      strncpy(ip, optarg, sizeof(ip) - 1);
+      break;
+    default:
+      print_details_help(prog);
+      return FAILED;
     }
- 
-    if (!iface[0]) {
-        print_details_help(prog);
-        return FAILED;
-    }
- 
-    if (ip[0])
-        return details_one_action(iface, ip);
-    else
-        return details_action(iface);
+  }
+
+  if (!iface[0])
+  {
+    print_details_help(prog);
+    return FAILED;
+  }
+
+  if (ip[0])
+    return details_one_action(iface, ip);
+  else
+    return details_action(iface);
 }
 
 /*******************************************************************************************
@@ -270,89 +306,89 @@ static struct option proto_opts[] = {
 
 static int parse_l2(char *arg, struct proto_rule *r)
 {
-    r->level = PROTO_L2;
-    r->proto = (__u16)strtoul(arg, NULL, 0);
-    r->sport = 0;
-    r->dport = 0;
-    return SUCCESS;
+  r->level = PROTO_L2;
+  r->proto = (__u16)strtoul(arg, NULL, 0);
+  r->sport = 0;
+  r->dport = 0;
+  return SUCCESS;
 }
 
 static int parse_l3(char *arg, struct proto_rule *r)
 {
-    r->level = PROTO_L3;
-    r->proto = (__u16)strtoul(arg, NULL, 0);
-    r->sport = 0;
-    r->dport = 0;
-    return SUCCESS;
+  r->level = PROTO_L3;
+  r->proto = (__u16)strtoul(arg, NULL, 0);
+  r->sport = 0;
+  r->dport = 0;
+  return SUCCESS;
 }
 
 static int parse_l4(char *arg, struct proto_rule *r)
 {
-    char *p, *s, *d;
+  char *p, *s, *d;
 
-    p = strtok(arg, ":");
-    s = strtok(NULL, ":");
-    d = strtok(NULL, ":");
+  p = strtok(arg, ":");
+  s = strtok(NULL, ":");
+  d = strtok(NULL, ":");
 
-    if (!p || !s || !d)
-        return FAILED;
+  if (!p || !s || !d)
+    return FAILED;
 
-    r->level = PROTO_L4;
-    r->proto = (__u16)strtoul(p, NULL, 0);
-    r->sport = (strcmp(s, "any") == 0) ? 0 : atoi(s);
-    r->dport = (strcmp(d, "any") == 0) ? 0 : atoi(d);
+  r->level = PROTO_L4;
+  r->proto = (__u16)strtoul(p, NULL, 0);
+  r->sport = (strcmp(s, "any") == 0) ? 0 : atoi(s);
+  r->dport = (strcmp(d, "any") == 0) ? 0 : atoi(d);
 
-    return SUCCESS;
+  return SUCCESS;
 }
 
 int parse_proto(int argc, char **argv, const char *prog)
 {
-    struct proto_rule rule = {0};
-    char iface[16] = {0};
-    char action_proto[4] = {0};
-    int c;
+  struct proto_rule rule = {0};
+  char iface[16] = {0};
+  char action_proto[4] = {0};
+  int c;
 
-    while ((c = getopt_long(argc, argv, "i:a:", proto_opts, NULL)) != -1)
+  while ((c = getopt_long(argc, argv, "i:a:", proto_opts, NULL)) != -1)
+  {
+    switch (c)
     {
-        switch (c)
-        {
-        case 'i':
-            strncpy(iface, optarg, sizeof(iface) - 1);
-            break;
-        case 'a':
-            strncpy(action_proto, optarg, sizeof(action_proto) - 1);
-            break;
-        case 1:
-            parse_l2(optarg, &rule);
-            break;
-        case 2:
-            parse_l3(optarg, &rule);
-            break;
-        case 3:
-            parse_l4(optarg, &rule);
-            break;
-        default:
-            print_proto_help(prog);
-            return FAILED;
-        }
+    case 'i':
+      strncpy(iface, optarg, sizeof(iface) - 1);
+      break;
+    case 'a':
+      strncpy(action_proto, optarg, sizeof(action_proto) - 1);
+      break;
+    case 1:
+      parse_l2(optarg, &rule);
+      break;
+    case 2:
+      parse_l3(optarg, &rule);
+      break;
+    case 3:
+      parse_l4(optarg, &rule);
+      break;
+    default:
+      print_proto_help(prog);
+      return FAILED;
     }
+  }
 
-    if (!iface[0] || !action_proto[0] || rule.level == 0)
-    {
-        print_proto_help(prog);
-        return FAILED;
-    }
+  if (!iface[0] || !action_proto[0] || rule.level == 0)
+  {
+    print_proto_help(prog);
+    return FAILED;
+  }
 
-    if (strcmp(action_proto, "add") == 0)
-        return protocol_allow_add_action(&rule);
-    else if (strcmp(action_proto, "del") == 0)
-        return protocol_allow_del_action(&rule);
-    else
-    {
-        printf("hgctl: unknown proto action '%s'\n", action_proto);
-        print_proto_help(prog);
-        return FAILED;
-    }
+  if (strcmp(action_proto, "add") == 0)
+    return protocol_allow_add_action(&rule);
+  else if (strcmp(action_proto, "del") == 0)
+    return protocol_allow_del_action(&rule);
+  else
+  {
+    printf("hgctl: unknown proto action '%s'\n", action_proto);
+    print_proto_help(prog);
+    return FAILED;
+  }
 }
 
 /*******************************************************************************************
@@ -360,164 +396,177 @@ int parse_proto(int argc, char **argv, const char *prog)
 *******************************************************************************************/
 void print_start_help(const char *prog)
 {
-    printf(
-        "Command: start\n"
-        "  %s start -i <iface> -P <portal_ip> -p <portal_port>\n"
-        "\n"
-        "Options:\n"
-        "  -i, --iface <iface>   Network interface (e.g. br0)\n"
-        "  -P, --portal-ip <ip>  Portal IP address\n"
-        "  -p, --portal-port <port> Portal port number\n"
-        "\n"
-        "Example:\n"
-        "  %s start -i br0 -P 192.168.1.1 -p 8080\n"
-        "\n",
-        prog, prog);
+  printf(
+      "Command: start\n"
+      "  %s start -i <iface> -P <portal_ip> -p <portal_port>\n"
+      "\n"
+      "Options:\n"
+      "  -i, --iface <iface>   Network interface (e.g. br0)\n"
+      "  -P, --portal-ip <ip>  Portal IP address\n"
+      "  -p, --portal-port <port> Portal port number\n"
+      "\n"
+      "Example:\n"
+      "  %s start -i br0 -P 192.168.1.1 -p 8080\n"
+      "\n",
+      prog, prog);
 }
 
 void print_stop_help(const char *prog)
 {
-    printf(
-        "Command: stop\n"
-        "  %s stop -i <iface>\n"
-        "\n"
-        "Options:\n"
-        "  -i, --iface <iface>   Network interface\n"
-        "\n"
-        "Example:\n"
-        "  %s stop -i br0\n"
-        "\n",
-        prog, prog);
+  printf(
+      "Command: stop\n"
+      "  %s stop -i <iface>\n"
+      "\n"
+      "Options:\n"
+      "  -i, --iface <iface>   Network interface\n"
+      "\n"
+      "Example:\n"
+      "  %s stop -i br0\n"
+      "\n",
+      prog, prog);
 }
 
 void print_add_help(const char *prog)
 {
-    printf(
-        "Command: add\n"
-        "  %s add -i <iface> -c <ip> [-e <sec>] [-w <sec>] [-D <kbps>] [-U <kbps>]\n"
-        "\n"
-        "Options:\n"
-        "  -i, --iface <iface>          Network interface\n"
-        "  -c, --client <ip>            Client IPv4 address\n"
-        "  -e, --expire <sec>           Session expiry in seconds (0 = never)\n"
-        "  -w, --idle <sec>             Idle timeout in seconds\n"
-        "  -D, --DownloadRate <kbps>    Download rate limit in kbit/s\n"
-        "  -U, --UploadRate <kbps>      Upload rate limit in kbit/s\n"
-        "\n"
-        "Example:\n"
-        "  %s add -i br0 -c 192.168.100.50 -e 3600 -w 600 -D 10240 -U 5120\n"
-        "\n",
-        prog, prog);
+  printf(
+      "Command: add\n"
+      "  %s add -i <iface> [-m <mac>] [-c <ip>] [-e <sec>] [-w <sec>] [-D <kbps>] [-U <kbps>]\n"
+      "\n"
+      "  At least one of -m or -c is required.\n"
+      "\n"
+      "Options:\n"
+      "  -i, --iface <iface>          Network interface\n"
+      "  -m, --mac <mac>              Client MAC address (aa:bb:cc:dd:ee:ff)\n"
+      "  -c, --client <ip>            Client IPv4 address\n"
+      "  -e, --expire <sec>           Session expiry in seconds (0 = never)\n"
+      "  -w, --idle <sec>             Idle timeout in seconds\n"
+      "  -D, --DownloadRate <kbps>    Download rate limit in kbit/s\n"
+      "  -U, --UploadRate <kbps>      Upload rate limit in kbit/s\n"
+      "\n"
+      "Examples:\n"
+      "  %s add -i br0 -m aa:bb:cc:dd:ee:ff -c 192.168.100.20 -e 3600 -D 10240 -U 5120\n"
+      "  %s add -i br0 -m aa:bb:cc:dd:ee:ff -D 10240 -U 5120\n"
+      "  %s add -i br0 -c 192.168.100.20 -e 3600 -D 10240 -U 5120\n"
+      "\n",
+      prog, prog, prog, prog);
 }
 
 void print_del_help(const char *prog)
 {
-    printf(
-        "Command: del\n"
-        "  %s del -i <iface> -c <ip>\n"
-        "\n"
-        "Options:\n"
-        "  -i, --iface <iface>   Network interface\n"
-        "  -c, --client <ip>     Client IPv4 address\n"
-        "\n"
-        "Example:\n"
-        "  %s del -i br0 -c 192.168.100.50\n"
-        "\n",
-        prog, prog);
+  printf(
+      "Command: del\n"
+      "  %s del -i <iface> [-m <mac>] [-c <ip>]\n"
+      "\n"
+      "  At least one of -m or -c is required.\n"
+      "  If only -c is given the MAC is resolved from hg_ip_mac (requires prior traffic).\n"
+      "\n"
+      "Options:\n"
+      "  -i, --iface <iface>   Network interface\n"
+      "  -m, --mac <mac>       Client MAC address (aa:bb:cc:dd:ee:ff)\n"
+      "  -c, --client <ip>     Client IPv4 address (resolved to MAC)\n"
+      "\n"
+      "Example:\n"
+      "  %s del -i br0 -m aa:bb:cc:dd:ee:ff\n"
+      "  %s del -i br0 -c 192.168.100.50\n"
+      "\n",
+      prog, prog, prog);
 }
 
 void print_show_help(const char *prog)
 {
-    printf(
-        "Command: show\n"
-        "  %s show -i <iface>\n"
-        "\n"
-        "Options:\n"
-        "  -i, --iface <iface>   Network interface\n"
-        "\n"
-        "Example:\n"
-        "  %s show -i br0\n"
-        "\n",
-        prog, prog);
+  printf(
+      "Command: show\n"
+      "  %s show -i <iface>\n"
+      "\n"
+      "Options:\n"
+      "  -i, --iface <iface>   Network interface\n"
+      "\n"
+      "Example:\n"
+      "  %s show -i br0\n"
+      "\n",
+      prog, prog);
 }
 
 void print_details_help(const char *prog)
 {
-    printf(
-        "Command: details\n"
-        "  %s details -i <iface>\n"
-        "\n"
-        "Options:\n"
-        "  -i, --iface <iface>   Network interface\n"
-        "\n"
-        "Example:\n"
-        "  %s details -i br0\n"
-        "\n",
-        prog, prog);
+  printf(
+      "Command: details\n"
+      "  %s details -i <iface>\n"
+      "\n"
+      "Options:\n"
+      "  -i, --iface <iface>   Network interface\n"
+      "\n"
+      "Example:\n"
+      "  %s details -i br0\n"
+      "\n",
+      prog, prog);
 }
 
 void print_proto_help(const char *prog)
 {
-    printf(
-        "Command: proto\n"
-        "  %s proto -a <add|del> -i <iface> [--l2 <ethertype> | --l3 <proto> | --l4 <p:s:d>]\n"
-        "\n"
-        "Options:\n"
-        "  -a, --action <add|del>   Add or remove a pre-auth allow rule\n"
-        "  -i, --iface <iface>      Network interface\n"
-        "      --l2 <ethertype>     Allow L2 EtherType       (e.g. 0x0806 = ARP)\n"
-        "      --l3 <proto>         Allow L3 IP proto number (e.g. 1 = ICMP)\n"
-        "      --l4 <p:s:d>         Allow L4 proto + ports\n"
-        "                           p = IP protocol (6=TCP, 17=UDP)\n"
-        "                           s = source port or 'any'\n"
-        "                           d = destination port or 'any'\n"
-        "\n"
-        "Examples:\n"
-        "  %s proto -a add -i br0 --l2 0x0806\n"
-        "  %s proto -a add -i br0 --l3 1\n"
-        "  %s proto -a add -i br0 --l4 17:any:53\n"
-        "  %s proto -a del -i br0 --l4 17:any:53\n"
-        "\n",
-        prog, prog, prog, prog, prog);
+  printf(
+      "Command: proto\n"
+      "  %s proto -a <add|del> -i <iface> [--l2 <ethertype> | --l3 <proto> | --l4 <p:s:d>]\n"
+      "\n"
+      "Options:\n"
+      "  -a, --action <add|del>   Add or remove a pre-auth allow rule\n"
+      "  -i, --iface <iface>      Network interface\n"
+      "      --l2 <ethertype>     Allow L2 EtherType       (e.g. 0x0806 = ARP)\n"
+      "      --l3 <proto>         Allow L3 IP proto number (e.g. 1 = ICMP)\n"
+      "      --l4 <p:s:d>         Allow L4 proto + ports\n"
+      "                           p = IP protocol (6=TCP, 17=UDP)\n"
+      "                           s = source port or 'any'\n"
+      "                           d = destination port or 'any'\n"
+      "\n"
+      "Examples:\n"
+      "  %s proto -a add -i br0 --l2 0x0806\n"
+      "  %s proto -a add -i br0 --l3 1\n"
+      "  %s proto -a add -i br0 --l4 17:any:53\n"
+      "  %s proto -a del -i br0 --l4 17:any:53\n"
+      "\n",
+      prog, prog, prog, prog, prog);
 }
 
 void print_help(const char *prog)
 {
-    printf(
-        "\n"
-        "HawkGate control utility\n"
-        "\n"
-        "Usage:\n"
-        "  %s <command> [options]\n"
-        "\n"
-        "Commands:\n"
-        "  start     Load eBPF and attach TC hooks to interface\n"
-        "  stop      Detach TC hooks and clean up\n"
-        "  add       Authenticate a client\n"
-        "  del       Deauthenticate a client\n"
-        "  show      Show per-client traffic counters\n"
-        "  details   Show detailed client info (state, rate, age)\n"
-        "  proto     Manage pre-auth protocol allow rules\n"
-        "  map-del   Delete an entry from a BPF map by key\n"
-        "\n",
-        prog);
+  printf(
+      "\n"
+      "HawkGate control utility\n"
+      "\n"
+      "Usage:\n"
+      "  %s <command> [options]\n"
+      "\n"
+      "Commands:\n"
+      "  start     Load eBPF and attach TC hooks to interface\n"
+      "  stop      Detach TC hooks and clean up\n"
+      "  add       Authenticate a client\n"
+      "  del       Deauthenticate a client\n"
+      "  show      Show per-client traffic counters\n"
+      "  details   Show detailed client info (state, rate, age)\n"
+      "  proto     Manage pre-auth protocol allow rules\n"
+      "  map-del   Delete an entry from a BPF map by key\n"
+      "  bypass-add  Add a static trusted IP (bypasses portal enforcement)\n"
+      "  bypass-del  Remove a static trusted IP\n"
 
-    print_start_help(prog);
-    print_stop_help(prog);
-    print_add_help(prog);
-    print_del_help(prog);
-    print_show_help(prog);
-    print_details_help(prog);
-    print_proto_help(prog);
-    print_map_del_help(prog);
+      "\n",
+      prog);
 
-    printf(
-        "Notes:\n"
-        "  - BPF maps are pinned under /sys/fs/bpf/hg/\n"
-        "  - Only one protocol rule can be added per 'proto' command\n"
-        "  - All protocol values are numeric (no names accepted)\n"
-        "  - Enforcement happens in the kernel datapath via eBPF TC hooks\n"
-        "\n");
+  print_start_help(prog);
+  print_stop_help(prog);
+  print_add_help(prog);
+  print_del_help(prog);
+  print_show_help(prog);
+  print_details_help(prog);
+  print_proto_help(prog);
+  print_map_del_help(prog);
+
+  printf(
+      "Notes:\n"
+      "  - BPF maps are pinned under /sys/fs/bpf/hg/\n"
+      "  - Only one protocol rule can be added per 'proto' command\n"
+      "  - All protocol values are numeric (no names accepted)\n"
+      "  - Enforcement happens in the kernel datapath via eBPF TC hooks\n"
+      "\n");
 }
 
 /*******************************************************************************************
@@ -526,54 +575,131 @@ void print_help(const char *prog)
 static struct option map_del_opts[] = {
     {"map", required_argument, 0, 'm'},
     {"key", required_argument, 0, 'k'},
-    {0, 0, 0, 0}
-};
+    {0, 0, 0, 0}};
 
 int parse_map_del(int argc, char **argv, const char *prog)
 {
-    char map_name[32] = {0};
-    char key_spec[64] = {0};
-    int c;
+  char map_name[32] = {0};
+  char key_spec[64] = {0};
+  int c;
 
-    while ((c = getopt_long(argc, argv, "m:k:", map_del_opts, NULL)) != -1)
+  while ((c = getopt_long(argc, argv, "m:k:", map_del_opts, NULL)) != -1)
+  {
+    switch (c)
     {
-        switch (c)
-        {
-        case 'm':
-            strncpy(map_name, optarg, sizeof(map_name) - 1);
-            break;
-        case 'k':
-            strncpy(key_spec, optarg, sizeof(key_spec) - 1);
-            break;
-        default:
-            print_map_del_help(prog);
-            return FAILED;
-        }
+    case 'm':
+      strncpy(map_name, optarg, sizeof(map_name) - 1);
+      break;
+    case 'k':
+      strncpy(key_spec, optarg, sizeof(key_spec) - 1);
+      break;
+    default:
+      print_map_del_help(prog);
+      return FAILED;
     }
+  }
 
-    if (!map_name[0] || !key_spec[0])
-    {
-        print_map_del_help(prog);
-        return FAILED;
-    }
+  if (!map_name[0] || !key_spec[0])
+  {
+    print_map_del_help(prog);
+    return FAILED;
+  }
 
-    return map_del_action(map_name, key_spec);
+  return map_del_action(map_name, key_spec);
 }
 
 void print_map_del_help(const char *prog)
 {
-    printf(
-        "Command: map-del\n"
-        "  %s map-del --map <map_name> --key <key_spec>\n"
-        "\n"
-        "Supported maps and key formats:\n"
-        "  hg_conntrack   <ip>:<port>        e.g. 192.168.100.50:54321\n"
-        "  hg_clients     <ip>               e.g. 192.168.100.50\n"
-        "  hg_proto       <proto>:<sport>:<dport>  e.g. 6:0:80\n"
-        "\n"
-        "Examples:\n"
-        "  %s map-del --map hg_conntrack --key 192.168.100.50:54321\n"
-        "  %s map-del --map hg_clients   --key 192.168.100.50\n"
-        "\n",
-        prog, prog, prog);
+  printf(
+      "Command: map-del\n"
+      "  %s map-del --map <map_name> --key <key_spec>\n"
+      "\n"
+      "Supported maps and key formats:\n"
+      "  hg_conntrack   <ip>:<port>        e.g. 192.168.100.50:54321\n"
+      "  hg_clients     <mac>              e.g. aa:bb:cc:dd:ee:ff\n"
+      "  hg_proto       <proto>:<sport>:<dport>  e.g. 6:0:80\n"
+      "\n"
+      "Examples:\n"
+      "  %s map-del --map hg_conntrack --key 192.168.100.50:54321\n"
+      "  %s map-del --map hg_clients   --key aa:bb:cc:dd:ee:ff\n"
+      "\n",
+      prog, prog, prog);
+}
+
+/*******************************************************************************************
+                            BYPASS ADD / DEL ACTION
+*******************************************************************************************/
+static struct option bypass_opts[] = {
+    {"ip", required_argument, 0, 1},
+    {0, 0, 0, 0}};
+
+int parse_bypass_add(int argc, char **argv, const char *prog)
+{
+  char ip[16] = {0};
+  int c;
+
+  while ((c = getopt_long(argc, argv, "", bypass_opts, NULL)) != -1)
+  {
+    switch (c)
+    {
+    case 1:
+      strncpy(ip, optarg, sizeof(ip) - 1);
+      break;
+    default:
+      print_bypass_help(prog);
+      return FAILED;
+    }
+  }
+
+  if (!ip[0])
+  {
+    print_bypass_help(prog);
+    return FAILED;
+  }
+
+  return bypass_add_action(ip);
+}
+
+int parse_bypass_del(int argc, char **argv, const char *prog)
+{
+  char ip[16] = {0};
+  int c;
+
+  while ((c = getopt_long(argc, argv, "", bypass_opts, NULL)) != -1)
+  {
+    switch (c)
+    {
+    case 1:
+      strncpy(ip, optarg, sizeof(ip) - 1);
+      break;
+    default:
+      print_bypass_help(prog);
+      return FAILED;
+    }
+  }
+
+  if (!ip[0])
+  {
+    print_bypass_help(prog);
+    return FAILED;
+  }
+
+  return bypass_del_action(ip);
+}
+
+void print_bypass_help(const char *prog)
+{
+  printf(
+      "Commands: bypass-add / bypass-del\n"
+      "  %s bypass-add --ip <ip>\n"
+      "  %s bypass-del --ip <ip>\n"
+      "\n"
+      "  Adds or removes a static trusted IP that bypasses captive portal enforcement.\n"
+      "  Traffic from (and to) these IPs is always forwarded regardless of auth state.\n"
+      "\n"
+      "Example:\n"
+      "  %s bypass-add --ip 192.168.100.50\n"
+      "  %s bypass-del --ip 192.168.100.50\n"
+      "\n",
+      prog, prog, prog, prog);
 }

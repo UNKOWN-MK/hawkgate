@@ -35,15 +35,42 @@ struct
   __type(value, __u8);
 } HG_PROTO_MAP SEC(".maps");
 
-/* Per-client auth + EDT state: src_ip → hg_client
+/* Per-client auth + EDT state: mac → hg_client
  * Must be BPF_MAP_TYPE_HASH (not LRU) — only HASH supports bpf_spin_lock. */
 struct
 {
   __uint(type, BPF_MAP_TYPE_HASH);
   __uint(max_entries, 4096);
-  __type(key, __u32);
+  __type(key, struct hg_mac_key);
   __type(value, struct hg_client);
 } HG_CLIENT_MAP SEC(".maps");
+
+/* MAC → current IP binding — written conditionally (only on IP change) */
+struct
+{
+  __uint(type, BPF_MAP_TYPE_HASH);
+  __uint(max_entries, 4096);
+  __type(key, struct hg_mac_key);
+  __type(value, __u32);
+} HG_MAC_IP_MAP SEC(".maps");
+
+/* IP → MAC reverse lookup — used by egress and hgctl add -c <ip> */
+struct
+{
+  __uint(type, BPF_MAP_TYPE_HASH);
+  __uint(max_entries, 4096);
+  __type(key, __u32);
+  __type(value, struct hg_mac_key);
+} HG_IP_MAC_MAP SEC(".maps");
+
+/* Static IP bypass — traffic from/to these IPs passes regardless of auth */
+struct
+{
+  __uint(type, BPF_MAP_TYPE_HASH);
+  __uint(max_entries, 256);
+  __type(key, __u32);
+  __type(value, __u8);
+} HG_BYPASS_MAP SEC(".maps");
 
 /* Per-CPU byte/packet counters: src_ip → hg_counter (per CPU) */
 struct
@@ -81,7 +108,6 @@ struct
   __type(value, struct hg_ct_val);
 } HG_CONNTRACK_MAP SEC(".maps");
 
-
 /* ─── apply_edt_shaping ────────────────────────────────────────────────────── *
  * Computes the next EDT departure timestamp for this packet and stamps it into *
  * skb->tstamp. The FQ qdisc holds the packet until that time arrives.         *
@@ -96,7 +122,7 @@ static __always_inline int apply_edt_shaping(struct __sk_buff *skb,
 {
   __u32 r_id = cs->rate_limit_id;
 
-    struct hg_rate_cfg *cfg = bpf_map_lookup_elem(&HG_RATE_MAP, &r_id);
+  struct hg_rate_cfg *cfg = bpf_map_lookup_elem(&HG_RATE_MAP, &r_id);
   if (!cfg)
     return TC_ACT_OK;
 
@@ -110,7 +136,7 @@ static __always_inline int apply_edt_shaping(struct __sk_buff *skb,
   bpf_spin_lock(&cs->lock);
 
   __u64 last_ts = is_upload ? cs->last_u_tstamp : cs->last_d_tstamp;
-  __u64 next_tstamp  = (now > last_ts) ? now + delay : last_ts + delay;
+  __u64 next_tstamp = (now > last_ts) ? now + delay : last_ts + delay;
 
   if (is_upload && (next_tstamp - now) > cfg->horizon_ns)
   {
@@ -130,16 +156,18 @@ static __always_inline int apply_edt_shaping(struct __sk_buff *skb,
 }
 
 /* ─── hg_tc_ingress ────────────────────────────────────────────────────────── *
- * TC INGRESS hook — upload path (replaces ndsULR nftables chain).             *
+ * TC INGRESS hook — upload path.                                                *
  *                                                                              *
  * Policy order:                                                                *
- *  1. L2 EtherType check  → HG_L2_ALLOW_MAP  (always enforced)               *
- *  2. Bypass portal-bound traffic             (skip auth + shaping)           *
- *  3. Auth lookup         → HG_CLIENT_MAP                                     *
- *       expired?          → delete + TC_ACT_SHOT                              *
- *       authenticated?    → EDT shaping + accounting + redirect to IFB        *
- *  4. Pre-auth protocol?  → HG_PROTO_MAP      (DNS, DHCP, ARP, etc.)         *
- *  5. Everything else     → redirect_to_portal() (in-kernel DNAT)            *
+ *  1. L2 EtherType check    → HG_L2_ALLOW_MAP  (always enforced)             *
+ *  2. Static bypass check   → HG_BYPASS_MAP    (trusted IPs pass always)     *
+ *  3. Conditional MAC↔IP binding update                                       *
+ *  4. Bypass portal-bound traffic               (skip auth + shaping)         *
+ *  5. Auth lookup           → HG_CLIENT_MAP     (keyed by MAC)                *
+ *       expired?            → delete + TC_ACT_SHOT                            *
+ *       authenticated?      → EDT shaping + accounting + redirect to IFB      *
+ *  6. Pre-auth protocol?    → HG_PROTO_MAP      (DNS, DHCP, ARP, etc.)       *
+ *  7. Everything else       → redirect_to_portal() (in-kernel DNAT)          *
  * ---------------------------------------------------------------------------- */
 SEC("tc")
 int hg_tc_ingress(struct __sk_buff *skb)
@@ -147,7 +175,7 @@ int hg_tc_ingress(struct __sk_buff *skb)
   void *data = (void *)(long)skb->data;
   void *data_end = (void *)(long)skb->data_end;
   struct iphdr *iph;
-  struct hg_client *auth;
+  struct hg_client *auth = NULL;
   struct hg_allow_key p_allow = {0};
   __u16 eth_proto;
 
@@ -170,7 +198,28 @@ int hg_tc_ingress(struct __sk_buff *skb)
     return TC_ACT_SHOT;
   }
 
-  /* 2 — bypass traffic already addressed to the portal */
+  /* past L2/INVALID early returns — eth and iph both valid */
+  __u32 src_ip = iph->saddr;
+
+  /* 2 — static bypass: trusted IPs pass unconditionally */
+  if (bpf_map_lookup_elem(&HG_BYPASS_MAP, &src_ip))
+    return TC_ACT_OK;
+
+  /* 3 — conditional MAC↔IP binding update
+   * eth header already validated by filter_proto — safe to re-cast data.
+   * Only write when IP changes — reduces map writes ~90% in steady state. */
+  struct ethhdr *eth = data;
+  struct hg_mac_key mac_key = {0};
+  __builtin_memcpy(mac_key.mac, eth->h_source, 6);
+
+  __u32 *existing_ip = bpf_map_lookup_elem(&HG_MAC_IP_MAP, &mac_key);
+  if (!existing_ip || *existing_ip != src_ip)
+  {
+    bpf_map_update_elem(&HG_MAC_IP_MAP, &mac_key, &src_ip, BPF_ANY);
+    bpf_map_update_elem(&HG_IP_MAC_MAP, &src_ip, &mac_key, BPF_ANY);
+  }
+
+  /* 4 — bypass traffic already addressed to the portal */
   __u32 cfg_key = 0;
   struct hg_portal_cfg *cfg = bpf_map_lookup_elem(&HG_PORTAL_CFG_MAP, &cfg_key);
   if (cfg)
@@ -186,12 +235,10 @@ int hg_tc_ingress(struct __sk_buff *skb)
       bpf_printk("hg ingress: drop portal ip but not portal port\n");
       return TC_ACT_SHOT;
     }
-   
   }
 
-  /* 3 — authenticated client path */
-  __u32 src_ip = iph->saddr;
-  auth = bpf_map_lookup_elem(&HG_CLIENT_MAP, &src_ip);
+  /* 5 — authenticated client path (keyed by MAC) */
+  auth = bpf_map_lookup_elem(&HG_CLIENT_MAP, &mac_key);
   if (auth)
   {
     __u64 now_ns = bpf_ktime_get_ns();
@@ -199,7 +246,7 @@ int hg_tc_ingress(struct __sk_buff *skb)
     /* session expiry check */
     if (auth->expiry_ns && now_ns > auth->expiry_ns)
     {
-      bpf_map_delete_elem(&HG_CLIENT_MAP, &src_ip);
+      bpf_map_delete_elem(&HG_CLIENT_MAP, &mac_key);
       struct hg_counter *cnt = bpf_map_lookup_elem(&HG_COUNTER_MAP, &src_ip);
       if (cnt)
         cnt->state = EXPIRE;
@@ -233,33 +280,35 @@ int hg_tc_ingress(struct __sk_buff *skb)
     return TC_ACT_OK;
   }
 
-  /* 4 — pre-auth protocol allow-list */
+  /* 6 — pre-auth protocol allow-list */
   if (proto_allowed(&p_allow))
     return TC_ACT_OK;
 
-  if(p_allow.proto != IPPROTO_TCP || p_allow.d_port != 80)
+  if (p_allow.proto != IPPROTO_TCP || p_allow.d_port != 80)
   {
     bpf_printk("hg ingress: drop not http pkts\n");
     return TC_ACT_SHOT;
   }
-  /* 5 — redirect everything else to captive portal */
-  if (!cfg) //this condition for just verifier friendly
+
+  /* 7 — redirect everything else to captive portal */
+  if (!cfg)
     return TC_ACT_OK;
-  
+
   bpf_printk("hg ingress: redirecting to portal\n");
-  return redirect_to_portal(skb,cfg);
+  return redirect_to_portal(skb, cfg);
 }
 
 /* ─── hg_tc_egress ─────────────────────────────────────────────────────────── *
- * TC EGRESS hook — download path (replaces ndsDLR nftables chain).            *
+ * TC EGRESS hook — download path.                                              *
  *                                                                              *
  * Policy order:                                                                *
- *  1. L2 EtherType check  → HG_L2_ALLOW_MAP  (always enforced)               *
- *  2. Bypass portal response traffic          (src == PORTAL_IP)              *
- *  3. Auth lookup         → HG_CLIENT_MAP                                     *
- *       authenticated?    → EDT shaping + accounting                          *
- *  4. Pre-auth protocol?  → HG_PROTO_MAP                                      *
- *  5. Everything else     → TC_ACT_SHOT (drop)                                *
+ *  1. L2 EtherType check    → HG_L2_ALLOW_MAP  (always enforced)             *
+ *  2. Bypass portal response traffic            (src == PORTAL_IP)            *
+ *  3. Static bypass check   → HG_BYPASS_MAP    (trusted IPs pass always)     *
+ *  4. Auth lookup           → HG_IP_MAC_MAP → HG_CLIENT_MAP (keyed by MAC)   *
+ *       authenticated?      → EDT shaping + accounting                        *
+ *  5. Pre-auth protocol?    → HG_PROTO_MAP                                    *
+ *  6. Everything else       → TC_ACT_SHOT (drop)                              *
  * ---------------------------------------------------------------------------- */
 SEC("tc")
 int hg_tc_egress(struct __sk_buff *skb)
@@ -267,7 +316,7 @@ int hg_tc_egress(struct __sk_buff *skb)
   void *data = (void *)(long)skb->data;
   void *data_end = (void *)(long)skb->data_end;
   struct iphdr *iph;
-  struct hg_client *auth;
+  struct hg_client *auth = NULL;
   struct hg_allow_key p_allow = {0};
   __u16 eth_proto;
 
@@ -299,9 +348,17 @@ int hg_tc_egress(struct __sk_buff *skb)
       return snat_from_conntrack(skb);
   }
 
-  /* 3 — authenticated client path */
+  /* 3 — static bypass: traffic destined to trusted IPs passes unconditionally */
   __u32 dst_ip = iph->daddr;
-  auth = bpf_map_lookup_elem(&HG_CLIENT_MAP, &dst_ip);
+  if (bpf_map_lookup_elem(&HG_BYPASS_MAP, &dst_ip))
+    return TC_ACT_OK;
+
+  /* 4 — authenticated client path (MAC-based lookup via reverse binding) */
+  struct hg_mac_key *dst_mac = bpf_map_lookup_elem(&HG_IP_MAC_MAP, &dst_ip);
+  if (!dst_mac)
+    goto check_preauth;
+
+  auth = bpf_map_lookup_elem(&HG_CLIENT_MAP, dst_mac);
   if (auth)
   {
     /* EDT rate shaping */
@@ -320,11 +377,12 @@ int hg_tc_egress(struct __sk_buff *skb)
     return TC_ACT_OK;
   }
 
-  /* 4 — pre-auth protocol allow-list */
+check_preauth:
+  /* 5 — pre-auth protocol allow-list */
   if (proto_allowed(&p_allow))
     return TC_ACT_OK;
 
-  /* 5 — drop everything else */
+  /* 6 — drop everything else */
   bpf_printk("hg egress: drop unauthenticated dst=0x%X\n", dst_ip);
   return TC_ACT_SHOT;
 }
@@ -381,7 +439,7 @@ static __always_inline int redirect_to_portal(struct __sk_buff *skb, struct hg_p
 {
   if (bpf_skb_pull_data(skb, 0) < 0)
     return TC_ACT_OK;
-  
+
   void *data = (void *)(long)skb->data;
   void *data_end = (void *)(long)skb->data_end;
 
@@ -404,14 +462,14 @@ static __always_inline int redirect_to_portal(struct __sk_buff *skb, struct hg_p
   if (data + ip_off + ip_hdr_len > data_end)
     return TC_ACT_SHOT;
 
-    struct hg_ct_key ct_key = {0};
-    struct hg_ct_val ct_val = {0};
+  struct hg_ct_key ct_key = {0};
+  struct hg_ct_val ct_val = {0};
 
   __be32 new_daddr = cfg->portal_ip;
   __be16 new_dport = cfg->portal_port;
 
-  //read the original header details before we overwrite them
-  //And store them in the conntrack map for later use
+  // read the original header details before we overwrite them
+  // And store them in the conntrack map for later use
   ct_val.orig_dst_ip = iph->daddr;
   ct_key.client_ip = iph->saddr;
   ct_val.created_ns = bpf_ktime_get_boot_ns();
@@ -436,15 +494,15 @@ static __always_inline int redirect_to_portal(struct __sk_buff *skb, struct hg_p
     struct tcphdr *tcph = data1 + l4_off;
     if ((void *)(tcph + 1) > data_end1)
       return TC_ACT_SHOT;
-    
-    //read the original header tcp ports before we overwrite them
+
+    // read the original header tcp ports before we overwrite them
     ct_val.orig_dst_port = tcph->dest;
     ct_key.client_port = tcph->source;
 
-    //Let's track the connection ,update to the conntrack map
+    // Let's track the connection ,update to the conntrack map
     bpf_map_update_elem(&HG_CONNTRACK_MAP, &ct_key, &ct_val, BPF_ANY);
 
-    //DNAT the packet to the portal IP and port
+    // DNAT the packet to the portal IP and port
     bpf_l4_csum_replace(skb, l4_off + offsetof(struct tcphdr, check),
                         ct_val.orig_dst_ip, new_daddr, sizeof(new_daddr));
     bpf_l4_csum_replace(skb, l4_off + offsetof(struct tcphdr, check),
@@ -452,11 +510,10 @@ static __always_inline int redirect_to_portal(struct __sk_buff *skb, struct hg_p
     bpf_skb_store_bytes(skb, l4_off + offsetof(struct tcphdr, dest),
                         &new_dport, sizeof(new_dport), 0);
   }
-  
+
   bpf_printk("hg ingress: portal redirect done\n");
   return TC_ACT_OK;
 }
-
 
 static __always_inline int snat_from_conntrack(struct __sk_buff *skb)
 {
@@ -491,7 +548,7 @@ static __always_inline int snat_from_conntrack(struct __sk_buff *skb)
   struct hg_ct_val *ct_val;
 
   ct_key.client_ip = iph->daddr;
-  if(iph_protocol == IPPROTO_TCP)
+  if (iph_protocol == IPPROTO_TCP)
   {
     struct tcphdr *tcph = data + ip_off + ip_hdr_len;
     if ((void *)(tcph + 1) > data_end)
@@ -499,14 +556,14 @@ static __always_inline int snat_from_conntrack(struct __sk_buff *skb)
 
     ct_key.client_port = tcph->dest;
     ct_val = bpf_map_lookup_elem(&HG_CONNTRACK_MAP, &ct_key);
-    if(!ct_val)
+    if (!ct_val)
     {
       bpf_printk("hg egress: no conntrack entry\n");
       return TC_ACT_OK;
     }
-    //SNAT the packet back to the original destination IP and port
+    // SNAT the packet back to the original destination IP and port
     __u64 now = bpf_ktime_get_boot_ns();
-    if(now - ct_val->created_ns > HG_CT_TIMEOUT_NS)
+    if (now - ct_val->created_ns > HG_CT_TIMEOUT_NS)
     {
       bpf_printk("hg egress: conntrack entry expired\n");
       return TC_ACT_OK;
@@ -516,10 +573,10 @@ static __always_inline int snat_from_conntrack(struct __sk_buff *skb)
     __be32 old_saddr = iph->saddr;
     __be16 old_sport = tcph->source;
     bpf_l3_csum_replace(skb, ip_off + offsetof(struct iphdr, check),
-                      old_saddr, new_saddr, sizeof(new_saddr));
+                        old_saddr, new_saddr, sizeof(new_saddr));
     bpf_skb_store_bytes(skb, ip_off + offsetof(struct iphdr, saddr),
-                      &new_saddr, sizeof(new_saddr), 0);
-    //port
+                        &new_saddr, sizeof(new_saddr), 0);
+    // port
 
     bpf_l4_csum_replace(skb, ip_off + ip_hdr_len + offsetof(struct tcphdr, check),
                         old_saddr, new_saddr, sizeof(new_saddr));
@@ -533,6 +590,4 @@ static __always_inline int snat_from_conntrack(struct __sk_buff *skb)
   {
     return TC_ACT_OK;
   }
-  
-  
 }
