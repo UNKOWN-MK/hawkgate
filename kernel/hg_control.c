@@ -627,30 +627,6 @@ int resolve_ip_to_mac(const char *ip, char *mac_out, size_t mac_len)
   return SUCCESS;
 }
 
-/* ─── resolve_ip_to_mac ─────────────────────────────────────────────────────── */
-int resolve_ip_to_mac(const char *ip, char *mac_out, size_t mac_len)
-{
-    __u32 ip_key;
-    if (inet_pton(AF_INET, ip, &ip_key) != 1)
-        return FAILED;
-
-    int fd = bpf_obj_get(MAP_PATH(HG_IP_MAC_MAP));
-    if (fd < 0)
-        return FAILED;
-
-    struct hg_mac_key key = {0};
-    bool found = (bpf_map_lookup_elem(fd, &ip_key, &key) == 0);
-    close(fd);
-
-    if (!found)
-        return FAILED;
-
-    snprintf(mac_out, mac_len, "%02x:%02x:%02x:%02x:%02x:%02x",
-             key.mac[0], key.mac[1], key.mac[2],
-             key.mac[3], key.mac[4], key.mac[5]);
-    return SUCCESS;
-}
-
 /* ─── show_action ──────────────────────────────────────────────────────────── *
  * Prints a summary header + top-N client table sorted by download bytes.      *
  * Options (future CLI flags, currently using defaults):                        *
