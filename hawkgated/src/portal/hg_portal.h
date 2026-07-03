@@ -18,5 +18,6 @@ typedef struct OsProbe
 void init_portal(HgBpfCtrl *b);
 std::string handle_portal(const HttpRequest& req, const std::string& client_ip);
 std::string handle_success(const HttpRequest& req, const std::string& client_ip);
+std::string handle_capport(const HttpRequest& req, const std::string& client_ip);
 
 #endif // HG_PORTAL_H

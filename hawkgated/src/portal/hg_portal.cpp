@@ -91,6 +91,37 @@ std::string handle_portal(const HttpRequest &req, const std::string &client_ip)
   return "HTTP/1.1 302 Found\r\nLocation: " + loc + "\r\nContent-Length: 0\r\n\r\n";
 }
 
+std::string handle_capport(const HttpRequest &req, const std::string &client_ip)
+{
+  (void)req;
+  std::string body;
+  HgClientStats stats;
+
+  if (g_bpf->poll_one(client_ip, stats) && stats.state == AUTH_OK)
+  {
+    /* authenticated — tell device it has internet */
+    long ttl = stats.ttl_sec > 0 ? stats.ttl_sec : 0;
+    body = "{\"captive\":false,\"seconds-remaining\":"
+         + std::to_string(ttl) + "}";
+  }
+  else
+  {
+    /* unauthenticated — tell device there is a portal */
+    std::string portal_url = "http://" + g_config.gateway_fqdn
+                           + ":" + std::to_string(g_config.http_port)
+                           + "/portal";
+    body = "{\"captive\":true,"
+           "\"user-portal-url\":\"" + portal_url + "\","
+           "\"venue-info-url\":\"" + portal_url + "\"}";
+  }
+
+  return "HTTP/1.1 200 OK\r\n"
+         "Content-Type: application/captive+json\r\n"
+         "Cache-Control: no-cache\r\n"
+         "Content-Length: " + std::to_string(body.size()) + "\r\n\r\n"
+         + body;
+}
+
 std::string handle_success(const HttpRequest &req, const std::string &client_ip)
 {
   (void)req;
