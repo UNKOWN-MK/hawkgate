@@ -3,6 +3,7 @@
 
 #include <string>
 #include <functional>
+#include <cstdint>
 #include "../http/hg_parser.h"
 
 using Handler = std::function<std::string(const HttpRequest&, const std::string&)>;
