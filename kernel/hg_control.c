@@ -72,6 +72,7 @@ static void hg_clean_maps(void)
   _clean_map(MAP_PATH(HG_MAC_IP_MAP));
   _clean_map(MAP_PATH(HG_IP_MAC_MAP));
   _clean_map(MAP_PATH(HG_BYPASS_MAP));
+  _clean_map(MAP_PATH(HG_WALLED_GARDEN_MAP));
 
   /* remove the pin directory itself — ignore ENOENT and ENOTEMPTY */
   if (rmdir(HG_PIN_DIR) < 0 && errno != ENOENT && errno != ENOTEMPTY)
@@ -94,6 +95,8 @@ static const struct
     {"map-del", MAP_DEL},
     {"bypass-add", BYPASS_ADD},
     {"bypass-del", BYPASS_DEL},
+    {"wg-add", WG_ADD},
+    {"wg-del", WG_DEL},
 
     {NULL, BAD_OP}};
 
@@ -133,6 +136,10 @@ int main(int argc, char **argv)
     return parse_bypass_add(argc, argv, prog);
   case BYPASS_DEL:
     return parse_bypass_del(argc, argv, prog);
+  case WG_ADD:
+    return parse_wg_add(argc, argv, prog);
+  case WG_DEL:
+    return parse_wg_del(argc, argv, prog);
 
   default:
     print_help(prog);
@@ -196,6 +203,7 @@ int start_action(const char *iface, const char *portal_ip, __u16 portal_port)
   bpf_map__set_pin_path(skel->maps.HG_MAC_IP_MAP, MAP_PATH(HG_MAC_IP_MAP));
   bpf_map__set_pin_path(skel->maps.HG_IP_MAC_MAP, MAP_PATH(HG_IP_MAC_MAP));
   bpf_map__set_pin_path(skel->maps.HG_BYPASS_MAP, MAP_PATH(HG_BYPASS_MAP));
+  bpf_map__set_pin_path(skel->maps.HG_WALLED_GARDEN_MAP, MAP_PATH(HG_WALLED_GARDEN_MAP));
 
   /* ── load — libbpf will pin each map to its set_pin_path on load ── */
   if (hg_tc_bpf__load(skel))
@@ -1120,5 +1128,111 @@ int bypass_del_action(const char *ip)
     return FAILED;
   }
   printf("hgctl: bypass removed for %s\n", ip);
+  return SUCCESS;
+}
+
+/* ─── wg_parse_cidr ────────────────────────────────────────────────────────── *
+ * Parses "192.168.1.0/24" or "93.184.216.34" into an hg_wg_key, masking host  *
+ * bits so the LPM_TRIE key is a valid prefix.                                 *
+ * ---------------------------------------------------------------------------- */
+static int wg_parse_cidr(const char *cidr, struct hg_wg_key *key)
+{
+  char ip_str[32] = {0};
+  int prefix = 32; /* default: host route */
+
+  const char *slash = strchr(cidr, '/');
+  if (slash)
+  {
+    size_t ip_len = (size_t)(slash - cidr);
+    if (ip_len >= sizeof(ip_str))
+    {
+      fprintf(stderr, "hgctl: invalid CIDR '%s'\n", cidr);
+      return FAILED;
+    }
+    strncpy(ip_str, cidr, ip_len);
+    ip_str[ip_len] = '\0';
+    prefix = atoi(slash + 1);
+  }
+  else
+  {
+    strncpy(ip_str, cidr, sizeof(ip_str) - 1);
+  }
+
+  if (prefix < 0 || prefix > 32)
+  {
+    fprintf(stderr, "hgctl: invalid prefix length in '%s'\n", cidr);
+    return FAILED;
+  }
+
+  memset(key, 0, sizeof(*key));
+  if (inet_pton(AF_INET, ip_str, &key->ip) != 1)
+  {
+    fprintf(stderr, "hgctl: invalid IP '%s'\n", ip_str);
+    return FAILED;
+  }
+
+  /* mask host bits so the stored prefix is exact */
+  if (prefix == 0)
+    key->ip = 0;
+  else if (prefix < 32)
+    key->ip &= htonl(0xFFFFFFFFu << (32 - prefix));
+  key->prefixlen = (__u32)prefix;
+
+  return SUCCESS;
+}
+
+/* ─── wg_add_action ────────────────────────────────────────────────────────── */
+int wg_add_action(const char *cidr)
+{
+  struct hg_wg_key key;
+  if (wg_parse_cidr(cidr, &key) != SUCCESS)
+    return FAILED;
+
+  int fd = bpf_obj_get(MAP_PATH(HG_WALLED_GARDEN_MAP));
+  if (fd < 0)
+  {
+    fprintf(stderr, "hgctl: cannot open walled garden map\n");
+    return FAILED;
+  }
+
+  __u8 val = 1;
+  int ret = bpf_map_update_elem(fd, &key, &val, BPF_ANY);
+  close(fd);
+  if (ret)
+  {
+    fprintf(stderr, "hgctl: wg-add failed for %s\n", cidr);
+    return FAILED;
+  }
+
+  struct in_addr a = {.s_addr = key.ip};
+  printf("hgctl: walled garden added %s/%u\n", inet_ntoa(a), key.prefixlen);
+  return SUCCESS;
+}
+
+/* ─── wg_del_action ────────────────────────────────────────────────────────── */
+int wg_del_action(const char *cidr)
+{
+  struct hg_wg_key key;
+  if (wg_parse_cidr(cidr, &key) != SUCCESS)
+    return FAILED;
+
+  int fd = bpf_obj_get(MAP_PATH(HG_WALLED_GARDEN_MAP));
+  if (fd < 0)
+  {
+    fprintf(stderr, "hgctl: cannot open walled garden map\n");
+    return FAILED;
+  }
+
+  int ret = bpf_map_delete_elem(fd, &key);
+  close(fd);
+  if (ret)
+  {
+    struct in_addr a = {.s_addr = key.ip};
+    fprintf(stderr, "hgctl: wg-del: %s/%u not found\n", inet_ntoa(a), key.prefixlen);
+    return FAILED;
+  }
+
+  struct in_addr a = {.s_addr = key.ip};
+  printf("hgctl: walled garden removed %s/%u\n", inet_ntoa(a), key.prefixlen);
   return SUCCESS;
 }

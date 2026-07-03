@@ -547,6 +547,8 @@ void print_help(const char *prog)
       "  map-del   Delete an entry from a BPF map by key\n"
       "  bypass-add  Add a static trusted IP (bypasses portal enforcement)\n"
       "  bypass-del  Remove a static trusted IP\n"
+      "  wg-add      Add a walled garden IP/subnet (reachable pre-auth)\n"
+      "  wg-del      Remove a walled garden IP/subnet\n"
 
       "\n",
       prog);
@@ -702,4 +704,83 @@ void print_bypass_help(const char *prog)
       "  %s bypass-del --ip 192.168.100.50\n"
       "\n",
       prog, prog, prog, prog);
+}
+
+/*******************************************************************************************
+                            WALLED GARDEN ADD / DEL ACTION
+*******************************************************************************************/
+static struct option wg_opts[] = {
+    {"ip", required_argument, 0, 1},
+    {0, 0, 0, 0}};
+
+int parse_wg_add(int argc, char **argv, const char *prog)
+{
+  char cidr[32] = {0};
+  int c;
+
+  while ((c = getopt_long(argc, argv, "", wg_opts, NULL)) != -1)
+  {
+    switch (c)
+    {
+    case 1:
+      strncpy(cidr, optarg, sizeof(cidr) - 1);
+      break;
+    default:
+      print_wg_help(prog);
+      return FAILED;
+    }
+  }
+
+  if (!cidr[0])
+  {
+    print_wg_help(prog);
+    return FAILED;
+  }
+
+  return wg_add_action(cidr);
+}
+
+int parse_wg_del(int argc, char **argv, const char *prog)
+{
+  char cidr[32] = {0};
+  int c;
+
+  while ((c = getopt_long(argc, argv, "", wg_opts, NULL)) != -1)
+  {
+    switch (c)
+    {
+    case 1:
+      strncpy(cidr, optarg, sizeof(cidr) - 1);
+      break;
+    default:
+      print_wg_help(prog);
+      return FAILED;
+    }
+  }
+
+  if (!cidr[0])
+  {
+    print_wg_help(prog);
+    return FAILED;
+  }
+
+  return wg_del_action(cidr);
+}
+
+void print_wg_help(const char *prog)
+{
+  printf(
+      "Commands: wg-add / wg-del\n"
+      "  %s wg-add --ip <ip>[/prefix]\n"
+      "  %s wg-del --ip <ip>[/prefix]\n"
+      "\n"
+      "  Adds or removes an IP or subnet that unauthenticated clients can reach\n"
+      "  (walled garden). No /prefix means a single host (/32).\n"
+      "\n"
+      "Example:\n"
+      "  %s wg-add --ip 93.184.216.34\n"
+      "  %s wg-add --ip 192.168.1.0/24\n"
+      "  %s wg-del --ip 93.184.216.34\n"
+      "\n",
+      prog, prog, prog, prog, prog);
 }

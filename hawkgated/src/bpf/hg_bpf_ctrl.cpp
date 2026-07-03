@@ -206,6 +206,22 @@ static void apply_preauth_l4()
   }
 }
 
+static void apply_walled_garden()
+{
+  for (const auto &ip : g_config.walled_garden_ips)
+  {
+    std::string val = ip;
+    const char *av[] = {
+        "hgctl", "wg-add",
+        "--ip", val.c_str(),
+        nullptr};
+    if (!exec_cmd(av))
+      log_warning(("hg_bpf_ctrl: failed to add walled garden entry: " + val).c_str());
+    else
+      log_info(("hg_bpf_ctrl: walled garden added " + val).c_str());
+  }
+}
+
 bool HgBpfCtrl::start_hgctl()
 {
   std::string port_str = std::to_string(g_config.http_port);
@@ -223,6 +239,7 @@ bool HgBpfCtrl::start_hgctl()
   apply_preauth_l2();
   apply_preauth_l3();
   apply_preauth_l4();
+  apply_walled_garden();
   return true;
 }
 

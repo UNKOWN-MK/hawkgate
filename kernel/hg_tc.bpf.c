@@ -72,6 +72,16 @@ struct
   __type(value, __u8);
 } HG_BYPASS_MAP SEC(".maps");
 
+/* Walled garden — unauthenticated clients can reach these IPs/subnets */
+struct
+{
+  __uint(type,        BPF_MAP_TYPE_LPM_TRIE);
+  __uint(max_entries, 64);
+  __type(key,         struct hg_wg_key);
+  __type(value,       __u8);
+  __uint(map_flags,   BPF_F_NO_PREALLOC);   /* required for LPM_TRIE */
+} HG_WALLED_GARDEN_MAP SEC(".maps");
+
 /* Per-CPU byte/packet counters: src_ip → hg_counter (per CPU) */
 struct
 {
@@ -167,6 +177,7 @@ static __always_inline int apply_edt_shaping(struct __sk_buff *skb,
  *       expired?            → delete + TC_ACT_SHOT                            *
  *       authenticated?      → EDT shaping + accounting + redirect to IFB      *
  *  6. Pre-auth protocol?    → HG_PROTO_MAP      (DNS, DHCP, ARP, etc.)       *
+ *  6a. Walled garden?        → HG_WALLED_GARDEN_MAP (allowed dst IP/subnet) *
  *  7. Everything else       → redirect_to_portal() (in-kernel DNAT)          *
  * ---------------------------------------------------------------------------- */
 SEC("tc")
@@ -284,6 +295,14 @@ int hg_tc_ingress(struct __sk_buff *skb)
   if (proto_allowed(&p_allow))
     return TC_ACT_OK;
 
+  /* 6a — walled garden: allow unauthenticated access to specific IPs/subnets */
+  struct hg_wg_key wg_key = {
+      .prefixlen = 32,
+      .ip        = iph->daddr,
+  };
+  if (bpf_map_lookup_elem(&HG_WALLED_GARDEN_MAP, &wg_key))
+    return TC_ACT_OK;
+
   if (p_allow.proto != IPPROTO_TCP || p_allow.d_port != 80)
   {
     bpf_printk("hg ingress: drop not http pkts\n");
@@ -380,6 +399,15 @@ int hg_tc_egress(struct __sk_buff *skb)
 check_preauth:
   /* 5 — pre-auth protocol allow-list */
   if (proto_allowed(&p_allow))
+    return TC_ACT_OK;
+
+  /* 5a — walled garden: allow return traffic from whitelisted IPs/subnets
+   * so unauthenticated clients get replies (e.g. TCP SYN-ACK) back.       */
+  struct hg_wg_key wg_key = {
+      .prefixlen = 32,
+      .ip        = iph->saddr,
+  };
+  if (bpf_map_lookup_elem(&HG_WALLED_GARDEN_MAP, &wg_key))
     return TC_ACT_OK;
 
   /* 6 — drop everything else */

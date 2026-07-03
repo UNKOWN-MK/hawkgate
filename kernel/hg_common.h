@@ -35,6 +35,7 @@
 #define HG_MAC_IP_MAP      hg_mac_ip    /* MAC → current IP binding   */
 #define HG_IP_MAC_MAP      hg_ip_mac    /* IP  → MAC reverse lookup   */
 #define HG_BYPASS_MAP      hg_bypass    /* static IP trust bypass      */
+#define HG_WALLED_GARDEN_MAP hg_walled_garden /* pre-auth reachable IPs/subnets */
 
 
 /* ─── BPF pin directory ────────────────────────────────────────────────────────
@@ -122,6 +123,15 @@ struct hg_client
   __u64 tx_packets;
   __u64 rx_bytes;
   __u64 rx_packets;
+};
+
+/* ─── Walled garden LPM key (hg_walled_garden map) ─────────────────────────── *
+ * Allows subnet matching — prefixlen=32 for a single host, 24 for a /24, etc. *
+ * Host bits of ip MUST be zero for a valid LPM_TRIE prefix.                   */
+struct hg_wg_key
+{
+  __u32 prefixlen; /* prefix length (32 for host, 24 for /24 etc)   */
+  __u32 ip;        /* network byte order, host bits must be zero    */
 };
 
 /* ─── Pre-auth protocol allow-list key (hg_proto map) ─────────────────────── */

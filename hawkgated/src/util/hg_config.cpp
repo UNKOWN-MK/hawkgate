@@ -106,6 +106,13 @@ bool load_config(const char *path)
       continue;
     }
 
+    if (current_section == "walled_garden")
+    {
+      if (key == "ip" && !value.empty())
+        g_config.walled_garden_ips.push_back(value);
+      continue;
+    }
+
     if (key == "iface_name")
       g_config.iface_name = value;
     else if (key == "http_port")

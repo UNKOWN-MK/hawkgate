@@ -22,6 +22,7 @@ typedef struct config
     std::vector<std::string> preauth_l2;
     std::vector<std::string> preauth_l3;
     std::vector<std::string> preauth_l4;
+    std::vector<std::string> walled_garden_ips;
 }HgConfig;
 
 extern HgConfig g_config;

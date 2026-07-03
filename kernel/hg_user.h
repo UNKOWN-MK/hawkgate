@@ -40,7 +40,9 @@ typedef enum {
     PROTOCOL = 7,
     MAP_DEL  = 8,
     BYPASS_ADD = 11,
-    BYPASS_DEL = 12
+    BYPASS_DEL = 12,
+    WG_ADD     = 9,
+    WG_DEL     = 10
 } action_opcode;
 
 /* ─── Pre-auth protocol rule (userspace only) ──────────────────────────────── */
@@ -71,6 +73,8 @@ int parse_details(int argc, char **argv, const char *prog);
 int parse_map_del(int argc, char **argv, const char *prog);
 int parse_bypass_add(int argc, char **argv, const char *prog);
 int parse_bypass_del(int argc, char **argv, const char *prog);
+int parse_wg_add(int argc, char **argv, const char *prog);
+int parse_wg_del(int argc, char **argv, const char *prog);
 
 
 /* ─── Help print functions (hg_cli.c) ─────────────────────────────────────── */
@@ -84,6 +88,7 @@ void print_details_help(const char *prog);
 void print_proto_help(const char *prog);
 void print_map_del_help(const char *prog);
 void print_bypass_help(const char *prog);
+void print_wg_help(const char *prog);
 
 
 /* ─── Action functions (hg_control.c) ─────────────────────────────────────── */
@@ -103,6 +108,8 @@ int map_del_action(const char *map_name, const char *key_spec);
 void show_protocols(void);
 int bypass_del_action(const char *ip);
 int bypass_add_action(const char *ip);
+int wg_add_action(const char *cidr);
+int wg_del_action(const char *cidr);
 int  resolve_ip_to_mac(const char *ip, char *mac_out, size_t mac_len);
 
 #endif /* HG_USER_H */
