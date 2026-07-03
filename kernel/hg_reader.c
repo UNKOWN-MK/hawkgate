@@ -181,10 +181,13 @@ int hg_read_all(struct hg_client_stats **out, int *count,
     if (open_read_maps(&counter_fd, &client_fd, &rate_fd) < 0)
         return -1;
 
+    int mac_fd = bpf_obj_get(MAP_PATH(HG_IP_MAC_MAP));
+
     int ncpu = libbpf_num_possible_cpus();
     struct hg_counter *percpu = calloc((size_t)ncpu, sizeof(struct hg_counter));
     if (!percpu)
     {
+        if (mac_fd >= 0) close(mac_fd);
         close(counter_fd);
         close(client_fd);
         close(rate_fd);
@@ -243,7 +246,9 @@ int hg_read_all(struct hg_client_stats **out, int *count,
         if (bpf_map_lookup_elem(counter_fd, &key, percpu) == 0)
         {
             aggregate_percpu(percpu, ncpu, &agg);
-            bpf_map_lookup_elem(client_fd, &key, &cs); /* best-effort */
+            struct hg_mac_key mac_key = {0};
+            if (mac_fd >= 0 && bpf_map_lookup_elem(mac_fd, &key, &mac_key) == 0)
+                bpf_map_lookup_elem(client_fd, &mac_key, &cs); /* best-effort */
 
             if (cs.rate_limit_id != RATE_ID_NO_LIMIT)
             {
@@ -284,6 +289,7 @@ int hg_read_all(struct hg_client_stats **out, int *count,
     }
 
     free(percpu);
+    if (mac_fd >= 0) close(mac_fd);
     close(counter_fd);
     close(client_fd);
     close(rate_fd);
@@ -356,10 +362,13 @@ int hg_read_one(const char *ip, struct hg_client_stats *out)
     if (open_read_maps(&counter_fd, &client_fd, &rate_fd) < 0)
         return -1;
 
+    int mac_fd = bpf_obj_get(MAP_PATH(HG_IP_MAC_MAP));
+
     int ncpu = libbpf_num_possible_cpus();
     struct hg_counter *percpu = calloc((size_t)ncpu, sizeof(struct hg_counter));
     if (!percpu)
     {
+        if (mac_fd >= 0) close(mac_fd);
         close(counter_fd);
         close(client_fd);
         close(rate_fd);
@@ -375,7 +384,9 @@ int hg_read_one(const char *ip, struct hg_client_stats *out)
         struct hg_rate_cfg rate = {0};
 
         aggregate_percpu(percpu, ncpu, &agg);
-        bpf_map_lookup_elem(client_fd, &ip_key, &cs);
+        struct hg_mac_key mac_key = {0};
+        if (mac_fd >= 0 && bpf_map_lookup_elem(mac_fd, &ip_key, &mac_key) == 0)
+            bpf_map_lookup_elem(client_fd, &mac_key, &cs);
 
         if (cs.rate_limit_id != RATE_ID_NO_LIMIT)
         {
@@ -392,6 +403,7 @@ int hg_read_one(const char *ip, struct hg_client_stats *out)
     }
 
     free(percpu);
+    if (mac_fd >= 0) close(mac_fd);
     close(counter_fd);
     close(client_fd);
     close(rate_fd);
