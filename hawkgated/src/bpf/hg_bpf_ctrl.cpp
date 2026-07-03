@@ -260,10 +260,27 @@ bool HgBpfCtrl::authenticate(const client_auth &auth)
     log_error("authenticate: invalid IP address");
     return false;
   }
+
   std::string expire = std::to_string(auth.expiry_sec);
   std::string idle = std::to_string(auth.idle_sec);
   std::string dn = std::to_string(auth.dn_rate);
   std::string up = std::to_string(auth.up_rate);
+
+  if (!auth.mac.empty())
+  {
+    const char *argv[] = {
+        "hgctl", "add",
+        "-i", g_config.iface_name.c_str(),
+        "-m", auth.mac.c_str(),
+        "-c", auth.ip.c_str(),
+        "-e", expire.c_str(),
+        "-w", idle.c_str(),
+        "-D", dn.c_str(),
+        "-U", up.c_str(),
+        nullptr};
+    return exec_cmd(argv);
+  }
+  /* mac not provided — hgctl resolves from hg_ip_mac (binding guaranteed by prior traffic) */
   const char *argv[] = {
       "hgctl", "add",
       "-i", g_config.iface_name.c_str(),

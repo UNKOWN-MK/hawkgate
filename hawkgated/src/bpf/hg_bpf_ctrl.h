@@ -37,12 +37,14 @@ typedef struct HgClientStats
 typedef struct client_auth
 {
   std::string ip;
+  std::string mac;      /* optional — if empty, hgctl resolves from binding map */
   uint32_t expiry_sec;
   uint32_t idle_sec;
   uint32_t dn_rate;
   uint32_t up_rate;
   uint16_t client_port;
 } client_auth;
+
 
 class HgBpfCtrl
 {
