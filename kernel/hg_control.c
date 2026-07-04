@@ -147,6 +147,23 @@ int main(int argc, char **argv)
   }
 }
 
+/* ─── cleanup_on_failure ───────────────────────────────────────────────────── */
+static void cleanup_on_failure(struct hg_tc_bpf *skel, const char *iface)
+{
+  char cmd[160];
+  snprintf(cmd, sizeof(cmd), "tc qdisc del dev %s clsact 2>/dev/null", iface);
+  run_cmd_best_effort(cmd);
+  if (skel)
+    hg_tc_bpf__destroy(skel);
+  hg_clean_maps();
+  run_cmd_best_effort("ip link del ifb_hg 2>/dev/null");
+  snprintf(cmd, sizeof(cmd), "tc qdisc del dev %s root 2>/dev/null", iface);
+  run_cmd_best_effort(cmd);
+  snprintf(cmd, sizeof(cmd), "ip link set dev %s txqueuelen 0 2>/dev/null", iface);
+  run_cmd_best_effort(cmd);
+  fprintf(stderr, "hgctl: cleaned up partial state after failure\n");
+}
+
 /* ─── start_action ─────────────────────────────────────────────────────────── *
  * Loads the BPF object, attaches hg_tc_ingress + hg_tc_egress to the clsact  *
  * qdisc on <iface>, installs FQ on the bridge (download EDT), and sets up     *
@@ -222,6 +239,7 @@ int start_action(const char *iface, const char *portal_ip, __u16 portal_port)
   if (err && err != -EEXIST)
   {
     fprintf(stderr, "hgctl: failed to create clsact on %s: %d\n", iface, err);
+    cleanup_on_failure(skel, iface);
     return FAILED;
   }
 
@@ -233,6 +251,7 @@ int start_action(const char *iface, const char *portal_ip, __u16 portal_port)
   if (err)
   {
     fprintf(stderr, "hgctl: failed to attach ingress on %s: %d\n", iface, err);
+    cleanup_on_failure(skel, iface);
     return FAILED;
   }
 
@@ -246,6 +265,7 @@ int start_action(const char *iface, const char *portal_ip, __u16 portal_port)
   if (err)
   {
     fprintf(stderr, "hgctl: failed to attach egress on %s: %d\n", iface, err);
+    cleanup_on_failure(skel, iface);
     return FAILED;
   }
 
@@ -256,11 +276,17 @@ int start_action(const char *iface, const char *portal_ip, __u16 portal_port)
    * Failure here means download rate limiting is silently broken — hard fail. */
   snprintf(cmd, sizeof(cmd), "ip link set dev %s txqueuelen 1000", iface);
   if (run_cmd_strict(cmd, "set txqueuelen on bridge") != SUCCESS)
+  {
+    cleanup_on_failure(skel, iface);
     return FAILED;
+  }
 
   snprintf(cmd, sizeof(cmd), "tc qdisc replace dev %s root fq", iface);
   if (run_cmd_strict(cmd, "install FQ qdisc on bridge (download EDT)") != SUCCESS)
+  {
+    cleanup_on_failure(skel, iface);
     return FAILED;
+  }
 
   printf("hgctl: download EDT shaping enabled (FQ on %s)\n", iface);
 
@@ -275,12 +301,16 @@ int start_action(const char *iface, const char *portal_ip, __u16 portal_port)
 
   if (run_cmd_strict("tc qdisc replace dev ifb_hg root fq",
                      "install FQ qdisc on ifb_hg (upload EDT)") != SUCCESS)
+  {
+    cleanup_on_failure(skel, iface);
     return FAILED;
+  }
 
   __u32 ifb_ifindex = if_nametoindex("ifb_hg");
   if (!ifb_ifindex)
   {
     fprintf(stderr, "hgctl: ifb_hg not found after setup\n");
+    cleanup_on_failure(skel, iface);
     return FAILED;
   }
 
@@ -288,6 +318,7 @@ int start_action(const char *iface, const char *portal_ip, __u16 portal_port)
   if (ifb_fd < 0)
   {
     fprintf(stderr, "hgctl: could not open IFB index map\n");
+    cleanup_on_failure(skel, iface);
     return FAILED;
   }
 
@@ -296,6 +327,7 @@ int start_action(const char *iface, const char *portal_ip, __u16 portal_port)
   {
     fprintf(stderr, "hgctl: IFB ifindex map update failed\n");
     close(ifb_fd);
+    cleanup_on_failure(skel, iface);
     return FAILED;
   }
 
@@ -306,6 +338,7 @@ int start_action(const char *iface, const char *portal_ip, __u16 portal_port)
   if (portal_fd < 0)
   {
     fprintf(stderr, "hgctl: could not open portal config map\n");
+    cleanup_on_failure(skel, iface);
     return FAILED;
   }
 
@@ -316,6 +349,7 @@ int start_action(const char *iface, const char *portal_ip, __u16 portal_port)
   {
     fprintf(stderr, "hgctl: invalid portal IP '%s'\n", portal_ip);
     close(portal_fd);
+    cleanup_on_failure(skel, iface);
     return FAILED;
   }
   portal_info.portal_ip = bin_addr.s_addr;
@@ -324,6 +358,7 @@ int start_action(const char *iface, const char *portal_ip, __u16 portal_port)
   {
     fprintf(stderr, "hgctl: portal config map update failed\n");
     close(portal_fd);
+    cleanup_on_failure(skel, iface);
     return FAILED;
   }
   printf("hgctl: portal cfg written (ip=%s port=%u)\n", portal_ip, portal_port);
@@ -337,24 +372,10 @@ int start_action(const char *iface, const char *portal_ip, __u16 portal_port)
  * ---------------------------------------------------------------------------- */
 int stop_action(const char *iface)
 {
-  struct bpf_tc_hook hook = {};
   char cmd[160];
-  int ifindex, err;
 
-  ifindex = get_ifindex(iface);
-  if (ifindex <= 0)
-    return FAILED;
-
-  hook.sz = sizeof(hook);
-  hook.ifindex = ifindex;
-  hook.attach_point = BPF_TC_INGRESS | BPF_TC_EGRESS;
-
-  err = bpf_tc_hook_destroy(&hook);
-  if (err && err != -ENOENT)
-  {
-    fprintf(stderr, "hgctl: failed to destroy TC hook: %s\n", strerror(-err));
-    return FAILED;
-  }
+  snprintf(cmd, sizeof(cmd), "tc qdisc del dev %s clsact 2>/dev/null", iface);
+  run_cmd_best_effort(cmd);
 
   /* tear down IFB and restore bridge qdisc — best effort on stop */
   run_cmd_best_effort("ip link del ifb_hg 2>/dev/null");

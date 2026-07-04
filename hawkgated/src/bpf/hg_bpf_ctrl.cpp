@@ -224,6 +224,14 @@ static void apply_walled_garden()
 
 bool HgBpfCtrl::start_hgctl()
 {
+  /* attempt cleanup of any stale BPF state from a previous crash */
+  const char *stop_argv[] = {
+      "hgctl", "stop",
+      "-i", g_config.iface_name.c_str(),
+      nullptr};
+  exec_cmd(stop_argv); /* return value intentionally ignored */
+  log_info("hg_bpf_ctrl: cleaned up any stale BPF state");
+
   std::string port_str = std::to_string(g_config.http_port);
   const char *argv[] = {
       "hgctl", "start",

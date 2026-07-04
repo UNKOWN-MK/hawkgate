@@ -1,0 +1,19 @@
+[Unit]
+Description=HawkGate eBPF captive portal daemon
+Documentation=https://github.com/UNKOWN-MK/hawkgate
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/hawkgated
+Restart=on-failure
+RestartSec=5
+User=root
+WorkingDirectory=/etc/hawkgate
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=hawkgated
+
+[Install]
+WantedBy=multi-user.target
