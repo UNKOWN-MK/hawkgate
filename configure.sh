@@ -316,10 +316,11 @@ install: all
 	install -d /usr/local/bin
 	install -d /etc/hawkgate
 	install -d /etc/systemd/system
+  install -d /etc/hawkgate/static
 	install -m 755 kernel/build/hgctl           /usr/local/bin/hgctl
 	install -m 755 hawkgated/build/hawkgated    /usr/local/bin/hawkgated
-	install -m 644 hawkgated/etc/hawkgate/static/login.html   /etc/hawkgate/login.html
-	install -m 644 hawkgated/etc/hawkgate/static/success.html /etc/hawkgate/success.html
+	install -m 644 hawkgated/etc/hawkgate/static/login.html   /etc/hawkgate/static/login.html
+	install -m 644 hawkgated/etc/hawkgate/static/success.html /etc/hawkgate/static/success.html
 	@if [ ! -f /etc/hawkgate/hawkgate.conf ]; then \\
 	    install -m 644 hawkgated/etc/hawkgate/hawkgate.conf.example /etc/hawkgate/hawkgate.conf; \\
 	    echo "  installed default config → /etc/hawkgate/hawkgate.conf"; \\
