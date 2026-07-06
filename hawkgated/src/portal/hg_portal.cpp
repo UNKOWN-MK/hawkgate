@@ -79,7 +79,7 @@ std::string handle_portal(const HttpRequest &req, const std::string &client_ip)
   }
   std::string host_name = host.find(':') != std::string::npos ? host.substr(0, host.find(':')) : host;
 
-  if (host_name == g_config.gateway_fqdn)
+  if (host_name == g_config.gateway_fqdn || req.path == "/portal")
   {
     std::string body = read_html_file(LOGIN_PAGE);
     return "HTTP/1.1 200 OK\r\n"
@@ -87,7 +87,8 @@ std::string handle_portal(const HttpRequest &req, const std::string &client_ip)
            "Content-Length: " +
            std::to_string(body.size()) + "\r\n\r\n" + body;
   }
-  std::string loc = "http://" + g_config.gateway_fqdn + ":" + std::to_string(g_config.http_port) + "/portal";
+  std::string loc = "http://" + g_config.portal_ip + ":"
+                + std::to_string(g_config.http_port) + "/portal";
   return "HTTP/1.1 302 Found\r\nLocation: " + loc + "\r\nContent-Length: 0\r\n\r\n";
 }
 
@@ -130,9 +131,11 @@ std::string handle_success(const HttpRequest &req, const std::string &client_ip)
   /* inject redirect URL */
   std::string placeholder = "http://example.com";
   size_t pos = body.find(placeholder);
-  if (pos != std::string::npos)
-    body.replace(pos, placeholder.size(),
-                 "http://" + g_config.gateway_fqdn);
+  while (pos != std::string::npos)
+  {
+    body.replace(pos, placeholder.size(), "https://www.google.com");
+    pos = body.find(placeholder, pos);
+  }
   return "HTTP/1.1 200 OK\r\n"
          "Content-Type: text/html\r\n"
          "Content-Length: " +

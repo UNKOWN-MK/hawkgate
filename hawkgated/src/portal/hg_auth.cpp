@@ -56,7 +56,7 @@ std::string handle_auth(const HttpRequest &req, const std::string &client_ip, ui
     {
       log_warning("Failed to delete portal config from kernel");
     }
-    std::string loc = "http://" + g_config.gateway_fqdn + ":" + std::to_string(g_config.http_port) + "/portal/success";
+    std::string loc = "http://" + g_config.portal_ip + ":" + std::to_string(g_config.http_port) + "/portal/success";
     return "HTTP/1.1 302 Found\r\n"
            "Location: " +
            loc + "\r\n"
