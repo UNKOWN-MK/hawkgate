@@ -5,32 +5,23 @@
 
 std::string route(const HttpRequest &req, const std::string &client_ip, uint16_t client_port)
 {
-  std::string msg = "route: " + req.method + " " + req.path +
-   " from " + client_ip + ":" + std::to_string(client_port);
-  
+  auto host_it = req.headers.find("Host");
+  std::string host_dbg = host_it != req.headers.end() ? host_it->second : "none";
+  std::string msg = "route: " + req.method + " " + req.path
+                  + " Host:" + host_dbg
+                  + " from " + client_ip + ":" + std::to_string(client_port);
   log_debug(msg.c_str());
+
   if (req.path == "/login")
-  {
     return handle_auth(req, client_ip, client_port);
-  }
   else if (req.path == "/portal")
-  {
     return handle_portal(req, client_ip);
-  }
   else if (req.path == "/portal/success")
-  {
     return handle_success(req, client_ip);
-  }
   else if (req.path == "/api/v1/capport")
-  {
     return handle_capport(req, client_ip);
-  }
   else if (req.path.find("/api/v1/") == 0)
-  {
     return "HTTP/1.1 501 Not Implemented\r\nContent-Length: 0\r\n\r\n";
-  }
   else
-  {
     return handle_portal(req, client_ip);
-  }
 }

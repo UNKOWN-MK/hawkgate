@@ -47,11 +47,15 @@ std::string handle_portal(const HttpRequest &req, const std::string &client_ip)
 {
   auto it = req.headers.find("Host");
   std::string host = (it != req.headers.end()) ? it->second : "";
+  std::string host_name = host.find(':') != std::string::npos
+                        ? host.substr(0, host.find(':')) : host;
+
   HgClientStats stats;
   if (g_bpf->poll_one(client_ip, stats))
   {
-    if (stats.state == AUTH_OK) // authenticated
+    if (stats.state == AUTH_OK)
     {
+      /* authenticated — serve exact OS probe response */
       for (auto &probe : g_probes)
       {
         if (probe.host && probe.path && probe.status)
@@ -66,7 +70,8 @@ std::string handle_portal(const HttpRequest &req, const std::string &client_ip)
             if (probe.body)
             {
               std::string body_str = probe.body;
-              response += "Content-Length: " + std::to_string(body_str.length()) + "\r\n\r\n" + body_str;
+              response += "Content-Length: " + std::to_string(body_str.length())
+                        + "\r\n\r\n" + body_str;
             }
             else
               response += "Content-Length: 0\r\n\r\n";
@@ -77,19 +82,29 @@ std::string handle_portal(const HttpRequest &req, const std::string &client_ip)
       return "HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\n\r\n";
     }
   }
-  std::string host_name = host.find(':') != std::string::npos ? host.substr(0, host.find(':')) : host;
 
-  if (host_name == g_config.gateway_fqdn || req.path == "/portal")
-  {
+ /* unauthenticated — serve login page for /portal directly,
+ * redirect everything else to /portal with 307               */
+if (host_name == g_config.gateway_fqdn || req.path == "/portal")
+{
     std::string body = read_html_file(LOGIN_PAGE);
     return "HTTP/1.1 200 OK\r\n"
            "Content-Type: text/html\r\n"
-           "Content-Length: " +
-           std::to_string(body.size()) + "\r\n\r\n" + body;
-  }
-  std::string loc = "http://" + g_config.portal_ip + ":"
+           "Content-Length: " + std::to_string(body.size())
+         + "\r\n\r\n" + body;
+}
+
+/* everything else — 307 redirect to portal with HTML fallback */
+std::string loc = "http://" + g_config.portal_ip + ":"
                 + std::to_string(g_config.http_port) + "/portal";
-  return "HTTP/1.1 302 Found\r\nLocation: " + loc + "\r\nContent-Length: 0\r\n\r\n";
+std::string fallback = "<html><head></head><body>"
+                       "<a href='" + loc + "'>Click here to sign in</a>"
+                       "</body></html>";
+return "HTTP/1.1 307 Temporary Redirect\r\n"
+       "Location: " + loc + "\r\n"
+       "Content-Type: text/html\r\n"
+       "Content-Length: " + std::to_string(fallback.size()) + "\r\n\r\n"
+       + fallback;
 }
 
 std::string handle_capport(const HttpRequest &req, const std::string &client_ip)
