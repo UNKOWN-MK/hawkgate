@@ -111,11 +111,23 @@ static bool is_expired(const struct hg_client *cs)
     return (cs->expiry_ns <= now_ns);
 }
 
+/* convert a MAC address to a colon-separated string */
+static void mac_to_str(const __u8 *mac, char *mac_str, size_t dest_size)
+{
+    if (mac == NULL || mac_str == NULL || dest_size < 18)
+    {
+        return; 
+    }
+    snprintf(mac_str, dest_size, "%02x:%02x:%02x:%02x:%02x:%02x",
+                    mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+}
+
 /* fill one hg_client_stats from raw map values */
 static void fill_stats(uint32_t ip_key,
                        const struct hg_counter *agg,
                        const struct hg_client *cs,
                        const struct hg_rate_cfg *rate,
+                       const struct hg_mac_key *mac_key,
                        struct hg_client_stats *s)
 {
     memset(s, 0, sizeof(*s));
@@ -140,6 +152,7 @@ static void fill_stats(uint32_t ip_key,
     s->horizon_ms = rate ? (rate->horizon_ns / 1000000ULL) : 0;
 
     resolve_times(cs, agg->last_seen, s);
+    mac_to_str(mac_key->mac, s->mac, sizeof(s->mac));
 }
 
 /* sort comparators */
@@ -256,7 +269,7 @@ int hg_read_all(struct hg_client_stats **out, int *count,
                 bpf_map_lookup_elem(rate_fd, &rid, &rate);
             }
 
-            fill_stats(key, &agg, &cs, &rate, &buf[idx]);
+            fill_stats(key, &agg, &cs, &rate, &mac_key, &buf[idx]);
 
             /* accumulate summary */
             if (summary)
@@ -394,7 +407,7 @@ int hg_read_one(const char *ip, struct hg_client_stats *out)
             bpf_map_lookup_elem(rate_fd, &rid, &rate);
         }
 
-        fill_stats(ip_key, &agg, &cs, &rate, out);
+        fill_stats(ip_key, &agg, &cs, &rate, &mac_key, out);
         found = 0;
     }
     else

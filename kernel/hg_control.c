@@ -787,8 +787,8 @@ int details_one_action(const char *iface, const char *ip)
     snprintf(ttl_buf, sizeof(ttl_buf), "in %ldm %lds",
              s.ttl_sec / 60, s.ttl_sec % 60);
 
-  printf("\nClient  %s    %s\n\n", s.ip, hg_state_str(s.state));
-
+  //printf("\nClient  %s  %s  %s\n\n", s.ip, s.mac, hg_state_str(s.state));
+  printf("\nClient  %s  %s  %s\n\n", s.ip, s.mac, hg_state_str(s.state));
   printf("  %-16s %s  (%lds ago)\n", "Auth time", auth_buf, s.session_sec);
   printf("  %-16s %s  (%s)\n", "Expires", expiry_buf, ttl_buf);
   printf("  %-16s id=%-4u  %lu kbps  horizon=%lums\n",

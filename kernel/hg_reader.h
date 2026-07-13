@@ -27,6 +27,7 @@ struct hg_client_stats
     /* identity */
     char ip[16];     /* dotted-decimal string e.g. "192.168.100.10"  */
     uint32_t ip_key; /* raw network-order IPv4 key from the map       */
+    char mac[18];    /* colon-separated string e.g. "aa:bb:cc:dd:ee:ff" */
 
     /* traffic counters (aggregated across all CPUs) */
     uint64_t up_bytes;
