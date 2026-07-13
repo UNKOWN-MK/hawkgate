@@ -532,9 +532,9 @@ static __always_inline int redirect_to_portal(struct __sk_buff *skb, struct hg_p
 
     // DNAT the packet to the portal IP and port
     bpf_l4_csum_replace(skb, l4_off + offsetof(struct tcphdr, check),
-                        ct_val.orig_dst_ip, new_daddr, sizeof(new_daddr));
+                        ct_val.orig_dst_ip, new_daddr, sizeof(new_daddr) | BPF_F_PSEUDO_HDR);   // ← add flag
     bpf_l4_csum_replace(skb, l4_off + offsetof(struct tcphdr, check),
-                        ct_val.orig_dst_port, new_dport, sizeof(new_dport));
+                        ct_val.orig_dst_port, new_dport, sizeof(new_dport));                     // ← leave as-is (port only)
     bpf_skb_store_bytes(skb, l4_off + offsetof(struct tcphdr, dest),
                         &new_dport, sizeof(new_dport), 0);
   }
@@ -601,15 +601,15 @@ static __always_inline int snat_from_conntrack(struct __sk_buff *skb)
     __be32 old_saddr = iph->saddr;
     __be16 old_sport = tcph->source;
     bpf_l3_csum_replace(skb, ip_off + offsetof(struct iphdr, check),
-                        old_saddr, new_saddr, sizeof(new_saddr));
+                        old_saddr, new_saddr, sizeof(new_saddr));                                // ← leave as-is (L3, no pseudo-hdr concept)
     bpf_skb_store_bytes(skb, ip_off + offsetof(struct iphdr, saddr),
                         &new_saddr, sizeof(new_saddr), 0);
     // port
 
     bpf_l4_csum_replace(skb, ip_off + ip_hdr_len + offsetof(struct tcphdr, check),
-                        old_saddr, new_saddr, sizeof(new_saddr));
+                        old_saddr, new_saddr, sizeof(new_saddr) | BPF_F_PSEUDO_HDR);              // ← add flag
     bpf_l4_csum_replace(skb, ip_off + ip_hdr_len + offsetof(struct tcphdr, check),
-                        old_sport, new_sport, sizeof(new_sport));
+                        old_sport, new_sport, sizeof(new_sport));                                 // ← leave as-is (port only)
     bpf_skb_store_bytes(skb, ip_off + ip_hdr_len + offsetof(struct tcphdr, source),
                         &new_sport, sizeof(new_sport), 0);
     return TC_ACT_OK;
@@ -619,3 +619,4 @@ static __always_inline int snat_from_conntrack(struct __sk_buff *skb)
     return TC_ACT_OK;
   }
 }
+
