@@ -316,7 +316,7 @@ install: all
 	install -d /usr/local/bin
 	install -d /etc/hawkgate
 	install -d /etc/systemd/system
-    install -d /etc/hawkgate/static
+  install -d /etc/hawkgate/static
 	install -m 755 kernel/build/hgctl           /usr/local/bin/hgctl
 	install -m 755 hawkgated/build/hawkgated    /usr/local/bin/hawkgated
 	install -m 644 hawkgated/etc/hawkgate/static/login.html   /etc/hawkgate/static/login.html
