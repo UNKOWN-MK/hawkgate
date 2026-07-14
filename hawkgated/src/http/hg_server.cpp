@@ -161,7 +161,8 @@ void HgServer::accept_connections()
     // Create HgConnection object for this client
     char ip_str[INET_ADDRSTRLEN];
     inet_ntop(AF_INET, &client_addr.sin_addr, ip_str, sizeof(ip_str));
-    uint16_t port = client_addr.sin_port;
+    //uint16_t port = client_addr.sin_port;
+    uint16_t port = ntohs(client_addr.sin_port);
     connections[client_fd] = std::make_unique<HgConnection>(client_fd, std::string(ip_str), port);
     std::string msg = "new connection: " + std::string(ip_str) + ":" + std::to_string(port);
     log_debug(msg.c_str());

@@ -410,10 +410,7 @@ int hg_read_one(const char *ip, struct hg_client_stats *out)
         fill_stats(ip_key, &agg, &cs, &rate, &mac_key, out);
         found = 0;
     }
-    else
-    {
-        fprintf(stderr, "hg_reader: client %s not found\n", ip);
-    }
+    
 
     free(percpu);
     if (mac_fd >= 0) close(mac_fd);
