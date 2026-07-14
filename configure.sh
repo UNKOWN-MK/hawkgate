@@ -27,8 +27,13 @@ BPF_BASE_FLAGS=${BPF_BASE_FLAGS:--O2 -g -target bpf}
 
 # ── colours (disable when not a terminal) ────────────────────────────────────
 if [ -t 1 ]; then
-    C_RESET='\033[0m'; C_BOLD='\033[1m'; C_GREEN='\033[0;32m'
-    C_YELLOW='\033[0;33m'; C_RED='\033[0;31m'; C_CYAN='\033[0;36m'; C_DIM='\033[2m'
+    C_RESET=$(printf '\033[0m')
+    C_BOLD=$(printf '\033[1m')
+    C_GREEN=$(printf '\033[0;32m')
+    C_YELLOW=$(printf '\033[0;33m')
+    C_RED=$(printf '\033[0;31m')
+    C_CYAN=$(printf '\033[0;36m')
+    C_DIM=$(printf '\033[2m')
 else
     C_RESET=''; C_BOLD=''; C_GREEN=''; C_YELLOW=''; C_RED=''; C_CYAN=''; C_DIM=''
 fi
@@ -178,11 +183,37 @@ fi
 ok "compile + link smoke test"
 
 # ── libbpf version check >= 1.4 ──────────────────────────────────────────────
-LIBBPF_VER=$(pkg-config --modversion libbpf 2>/dev/null || echo "0.0")
+# Try pkg-config first, fall back to bpftool version string,
+# then fall back to shared library filename from ldconfig/find.
+LIBBPF_VER=""
+
+if pkg-config --exists libbpf 2>/dev/null; then
+    LIBBPF_VER=$(pkg-config --modversion libbpf 2>/dev/null)
+fi
+
+if [ -z "$LIBBPF_VER" ]; then
+    # bpftool embeds the libbpf version it was linked with
+    # output format: "using libbpf v1.4" or "using libbpf v1.4.0"
+    LIBBPF_VER=$(bpftool version 2>/dev/null \
+        | grep -i 'libbpf' \
+        | grep -oE 'v?[0-9]+\.[0-9]+(\.[0-9]+)?' \
+        | head -1 | sed 's/^v//' || echo "")
+fi
+
+if [ -z "$LIBBPF_VER" ]; then
+    # parse shared library filename e.g. libbpf.so.1.4.0 or libbpf.so.1.8.0
+    LIBBPF_VER=$(find /usr/lib /usr/local/lib /usr/local/lib64 /usr/lib64 \
+        -name 'libbpf.so.*' 2>/dev/null \
+        | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' \
+        | sort -V | tail -1 || echo "")
+fi
+
 LIBBPF_MAJ=$(echo "$LIBBPF_VER" | cut -d. -f1)
 LIBBPF_MIN=$(echo "$LIBBPF_VER" | cut -d. -f2)
-if [ "$LIBBPF_MAJ" -lt 1 ] || { [ "$LIBBPF_MAJ" -eq 1 ] && [ "$LIBBPF_MIN" -lt 4 ]; }; then
-    fail "libbpf $LIBBPF_VER is too old\n        HawkGate requires libbpf >= 1.4\n        Install:  apt install libbpf-dev  ${C_DIM}(Ubuntu 24.04+)${C_RESET}\n                  or build from source: https://github.com/libbpf/libbpf"
+
+if [ -z "$LIBBPF_MAJ" ] || [ "$LIBBPF_MAJ" -lt 1 ] || \
+   { [ "$LIBBPF_MAJ" -eq 1 ] && [ "$LIBBPF_MIN" -lt 4 ]; }; then
+    fail "libbpf ${LIBBPF_VER:-not found} is too old or not detected\n        HawkGate requires libbpf >= 1.4\n        Install:  apt install libbpf-dev  ${C_DIM}(Ubuntu 24.04+)${C_RESET}\n                  or build from source: https://github.com/libbpf/libbpf"
 fi
 ok "libbpf $LIBBPF_VER  ${C_DIM}(>= 1.4 required)${C_RESET}"
 
@@ -368,3 +399,5 @@ printf "    ${C_CYAN}make hawkgated${C_RESET}     daemon only\n"
 printf "    ${C_CYAN}make rebuild${C_RESET}       clean build from scratch\n"
 printf "    ${C_CYAN}sudo make install${C_RESET}  install to system\n"
 printf "    ${C_CYAN}sudo hgctl start -i br0 -P <portal_ip> -p 2050${C_RESET}\n\n"
+
+
