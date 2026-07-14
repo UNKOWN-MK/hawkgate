@@ -138,9 +138,8 @@ ok "C++20 support confirmed"
 section "Kernel version"
 KVER=$(uname -r)
 KMAJ=$(echo "$KVER" | cut -d. -f1)
-KMIN=$(echo "$KVER" | cut -d. -f2)
-if [ "$KMAJ" -lt 5 ] || { [ "$KMAJ" -eq 5 ] && [ "$KMIN" -lt 13 ]; }; then
-    fail "kernel $KVER is too old\n        HawkGate requires Linux ≥ 5.13  (bpf_skb_set_tstamp)"
+if [ "$KMAJ" -lt 6 ]; then
+    fail "kernel $KVER is too old\n        HawkGate requires Linux ≥ 6.0"
 fi
 ok "Linux $KVER"
 
@@ -177,6 +176,15 @@ if ! printf '#include <bpf/libbpf.h>\n#include <bpf/bpf.h>\nint main(void){retur
                   yum install libbpf-devel elfutils-libelf-devel  ${C_DIM}(RHEL/Fedora)${C_RESET}"
 fi
 ok "compile + link smoke test"
+
+# ── libbpf version check >= 1.4 ──────────────────────────────────────────────
+LIBBPF_VER=$(pkg-config --modversion libbpf 2>/dev/null || echo "0.0")
+LIBBPF_MAJ=$(echo "$LIBBPF_VER" | cut -d. -f1)
+LIBBPF_MIN=$(echo "$LIBBPF_VER" | cut -d. -f2)
+if [ "$LIBBPF_MAJ" -lt 1 ] || { [ "$LIBBPF_MAJ" -eq 1 ] && [ "$LIBBPF_MIN" -lt 4 ]; }; then
+    fail "libbpf $LIBBPF_VER is too old\n        HawkGate requires libbpf >= 1.4\n        Install:  apt install libbpf-dev  ${C_DIM}(Ubuntu 24.04+)${C_RESET}\n                  or build from source: https://github.com/libbpf/libbpf"
+fi
+ok "libbpf $LIBBPF_VER  ${C_DIM}(>= 1.4 required)${C_RESET}"
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Write kernel/Makefile
@@ -311,26 +319,28 @@ rebuild:
 clean:
 	\$(MAKE) -C kernel clean
 	\$(MAKE) -C hawkgated clean
+	rm -f kernel/Makefile hawkgated/Makefile Makefile
+	@echo "  Makefiles removed — run ./configure.sh to regenerate"
 
 install: all
 	install -d /usr/local/bin
 	install -d /etc/hawkgate
+	install -d /etc/hawkgate/static
 	install -d /etc/systemd/system
-  install -d /etc/hawkgate/static
-	install -m 755 kernel/build/hgctl           /usr/local/bin/hgctl
-	install -m 755 hawkgated/build/hawkgated    /usr/local/bin/hawkgated
-	install -m 644 hawkgated/etc/hawkgate/static/login.html   /etc/hawkgate/static/login.html
-	install -m 644 hawkgated/etc/hawkgate/static/success.html /etc/hawkgate/static/success.html
+	install -m 755 kernel/build/hgctl                              /usr/local/bin/hgctl
+	install -m 755 hawkgated/build/hawkgated                       /usr/local/bin/hawkgated
+	install -m 644 hawkgated/etc/hawkgate/static/login.html        /etc/hawkgate/static/login.html
+	install -m 644 hawkgated/etc/hawkgate/static/success.html      /etc/hawkgate/static/success.html
 	@if [ ! -f /etc/hawkgate/hawkgate.conf ]; then \\
 	    install -m 644 hawkgated/etc/hawkgate/hawkgate.conf /etc/hawkgate/hawkgate.conf; \\
 	    echo "  installed default config → /etc/hawkgate/hawkgate.conf"; \\
 	else \\
 	    echo "  skipped config (already exists) → /etc/hawkgate/hawkgate.conf"; \\
 	fi
-	install -m 644 hawkgated/etc/hawkgate/hawkgated.service /etc/systemd/system/hawkgated.service
+	install -m 644 hawkgated/etc/hawkgate/hawkgated.service        /etc/systemd/system/hawkgated.service
 	systemctl daemon-reload
 	@echo ""
-	@echo "  HawkGate installed. Next steps:"
+	@echo "  HawkGate installed."
 	@echo "    1. Edit /etc/hawkgate/hawkgate.conf"
 	@echo "    2. systemctl enable --now hawkgated"
 	@echo ""
@@ -345,3 +355,16 @@ uninstall:
 	@echo "  Binaries and service removed."
 	@echo "  Config and portal pages kept at /etc/hawkgate/ — remove manually if needed."
 MAKE
+ok "Makefile  ${C_DIM}($ROOT_MAKEFILE)${C_RESET}"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Done
+# ─────────────────────────────────────────────────────────────────────────────
+printf "\n${C_BOLD}${C_GREEN}  ✔  Configuration complete${C_RESET}\n\n"
+printf "  ${C_BOLD}Next steps:${C_RESET}\n"
+printf "    ${C_CYAN}make${C_RESET}               build everything\n"
+printf "    ${C_CYAN}make kernel${C_RESET}        kernel module + hgctl only\n"
+printf "    ${C_CYAN}make hawkgated${C_RESET}     daemon only\n"
+printf "    ${C_CYAN}make rebuild${C_RESET}       clean build from scratch\n"
+printf "    ${C_CYAN}sudo make install${C_RESET}  install to system\n"
+printf "    ${C_CYAN}sudo hgctl start -i br0 -P <portal_ip> -p 2050${C_RESET}\n\n"
