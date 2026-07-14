@@ -1,6 +1,7 @@
 #ifndef HG_CONFIG_H
 #define HG_CONFIG_H
 
+#include "hg_log.h"
 #include <string>
 #include <cstdint>
 #include <vector>
@@ -9,6 +10,7 @@ enum class PortalMode { BUILTIN, EXTERNAL_URL };
 
 typedef struct config
 {
+    LogLevel log_level = LogLevel::INFO;
     std::string iface_name;
     uint16_t http_port;
     std::string portal_ip;

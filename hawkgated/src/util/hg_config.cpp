@@ -113,7 +113,23 @@ bool load_config(const char *path)
       continue;
     }
 
-    if (key == "iface_name")
+    if (key == "log_level")
+    {
+      if (value == "debug")
+        g_config.log_level = LogLevel::DEBUG;
+      else if (value == "info")
+        g_config.log_level = LogLevel::INFO;
+      else if (value == "warning")
+        g_config.log_level = LogLevel::WARNING;
+      else if (value == "error")
+        g_config.log_level = LogLevel::ERROR;
+      else
+      {
+        log_warning("Invalid log_level value, defaulting to info");
+        g_config.log_level = LogLevel::INFO;
+      }
+    }
+    else if (key == "iface_name")
       g_config.iface_name = value;
     else if (key == "http_port")
     {

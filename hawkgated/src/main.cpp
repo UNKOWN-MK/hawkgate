@@ -57,6 +57,7 @@ int main(int argc, char *argv[])
     log_error("Failed to load config, check the config file for errors");
     return EXIT_FAILURE;
   }
+  set_log_level(g_config.log_level);
   //Initialize and run of kernel module
   HgBpfCtrl bpf;
   g_bpf_ctrl = &bpf;

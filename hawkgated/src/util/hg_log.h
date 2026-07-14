@@ -12,6 +12,7 @@ enum class LogLevel {
     ERROR
 };
 
+void set_log_level(LogLevel level);
 void log_message(LogLevel level, const char* message,src_loc loc);
 void log_info(const char* message,src_loc loc = src_loc::current());
 void log_error(const char* message,src_loc loc = src_loc::current());

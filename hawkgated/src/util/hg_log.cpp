@@ -2,8 +2,18 @@
 #include <cstdio>
 #include <ctime>
 
+static LogLevel g_current_level = LogLevel::INFO;
+
+void set_log_level(LogLevel level)
+{
+    g_current_level = level;
+}
+
 void log_message(LogLevel level, const char* message, src_loc loc)
 {
+    if (level < g_current_level)
+        return;
+
     const char* prefix = "[UNKNOWN]";
     switch (level)
     {
