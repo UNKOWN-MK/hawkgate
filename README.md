@@ -81,7 +81,7 @@ HawkGate has two halves that communicate only through the BPF map filesystem at 
 - `hgctl` is the sole writer of all BPF maps — clean privilege boundary
 - `hg_reader.c` links directly into hawkgated for zero-overhead stats reads
 
-**`hawkgated/`** — C++20 captive portal daemon
+**`hawkgated/`** — C++ captive portal daemon
 - Single-threaded epoll ET HTTP/1.1 server
 - Shells out to `hgctl` for all kernel state changes (no direct map writes)
 - Pluggable `AuthProvider` interface — swap auth backends without touching the daemon
@@ -216,7 +216,7 @@ sudo hgctl proto -a add -i br0 --l4 17:any:53
 ```
 hawkgate/
 ├── kernel/          eBPF TC programs + hgctl CLI (C)
-├── hawkgated/       captive portal daemon (C++20)
+├── hawkgated/       captive portal daemon (C++)
 │   ├── src/         daemon source
 │   └── etc/         default config + portal pages
 ├── docs/            user and developer documentation
