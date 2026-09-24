@@ -13,7 +13,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Kernel: 6.0+](https://img.shields.io/badge/Kernel-6.0%2B-orange.svg)]()
-[![Language: C/C++](https://img.shields.io/badge/Language-C%2FC%2B%2B20-green.svg)]()
+[![Language: C/C++](https://img.shields.io/badge/Language-C%2FC%2B%2B-green.svg)]()
 
 </div>
 
