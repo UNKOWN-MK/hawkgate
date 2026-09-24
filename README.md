@@ -92,7 +92,7 @@ HawkGate has two halves that communicate only through the BPF map filesystem at 
 
 - Linux kernel **6.0 or later**
 - x86\_64
-- clang, gcc, g++ (C++20), bpftool, make
+- clang, gcc, g++ (C++), bpftool, make
 - libbpf-dev, libelf-dev, zlib1g-dev
 
 ---
